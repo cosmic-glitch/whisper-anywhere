@@ -10,7 +10,26 @@ ICON_SOURCE="$ROOT_DIR/NativeWhisper/Resources/AppIcon.icns"
 
 cd "$ROOT_DIR"
 
+terminate_running_app() {
+  if pgrep -x "NativeWhisper" >/dev/null 2>&1; then
+    echo "Stopping running NativeWhisper process..."
+    pkill -x "NativeWhisper" || true
+
+    for _ in {1..20}; do
+      if ! pgrep -x "NativeWhisper" >/dev/null 2>&1; then
+        return
+      fi
+      sleep 0.1
+    done
+
+    echo "Force stopping NativeWhisper process..."
+    pkill -9 -x "NativeWhisper" || true
+  fi
+}
+
 swift build -c release
+
+terminate_running_app
 
 rm -rf "$APP_PATH"
 mkdir -p "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Resources"
@@ -26,8 +45,8 @@ cat > "$APP_PATH/Contents/Info.plist" <<'PLIST'
   <key>CFBundleIdentifier</key><string>ai.nativewhisper.app</string>
   <key>CFBundleName</key><string>NativeWhisper</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>1.2.1</string>
-  <key>CFBundleVersion</key><string>3</string>
+  <key>CFBundleShortVersionString</key><string>1.2.2</string>
+  <key>CFBundleVersion</key><string>4</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>LSUIElement</key><true/>

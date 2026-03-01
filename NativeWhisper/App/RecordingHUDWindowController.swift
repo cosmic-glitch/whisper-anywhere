@@ -97,7 +97,7 @@ final class RecordingHUDWindowController: RecordingHUDControlling {
         case .recording:
             return NSSize(width: 150, height: 36)
         case .transcribing:
-            return NSSize(width: 246, height: 36)
+            return NSSize(width: 210, height: 36)
         }
     }
 

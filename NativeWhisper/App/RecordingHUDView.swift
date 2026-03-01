@@ -15,33 +15,32 @@ struct RecordingHUDView: View {
     @ObservedObject var model: RecordingHUDModel
 
     var body: some View {
-        HStack(spacing: 8) {
+        Group {
             if model.mode == .recording {
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.92))
+                HStack(spacing: 8) {
+                    Image(systemName: "mic.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.92))
 
-                HStack(spacing: 4) {
-                    ForEach(Array(model.bands.enumerated()), id: \.offset) { index, band in
-                        Capsule(style: .continuous)
-                            .fill(Color.white.opacity(0.95))
-                            .frame(width: 4, height: barHeight(for: band))
+                    HStack(spacing: 4) {
+                        ForEach(Array(model.bands.enumerated()), id: \.offset) { index, band in
+                            Capsule(style: .continuous)
+                                .fill(Color.white.opacity(0.95))
+                                .frame(width: 4, height: barHeight(for: band))
+                        }
                     }
+                    .frame(height: 18)
+                    .animation(.easeOut(duration: 0.08), value: model.bands)
                 }
-                .frame(height: 18)
-                .animation(.easeOut(duration: 0.08), value: model.bands)
             } else {
-                ProgressView()
-                    .progressViewStyle(.circular)
-                    .controlSize(.small)
-                    .tint(.white.opacity(0.9))
-
-                Text("Transcribing with OpenAI Whisper")
+                Text("Transcribing")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.95))
                     .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .center)
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
         .background(Color.clear)
