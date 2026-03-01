@@ -29,6 +29,7 @@ final class MenuBarController: ObservableObject {
 
     private var meterTask: Task<Void, Never>?
     private var smoothedLevel: Float = 0.08
+    private var smoothedBands: [Float] = Array(repeating: 0.08, count: 5)
     private var started = false
 
     let config: AppConfig
@@ -185,10 +186,13 @@ final class MenuBarController: ObservableObject {
     private func handleStateTransition(from oldState: DictationState, to newState: DictationState) {
         let wasRecording = isRecordingState(oldState)
         let isRecording = isRecordingState(newState)
+        let wasTranscribing = isTranscribingState(oldState)
+        let isTranscribing = isTranscribingState(newState)
 
         if !wasRecording && isRecording {
             chimeService.playStartChime()
-            hudController.update(level: 0.08)
+            hudController.setMode(.recording)
+            hudController.update(bands: Array(repeating: 0.08, count: 5))
             hudController.show()
             startMeterPolling()
             return
@@ -196,6 +200,22 @@ final class MenuBarController: ObservableObject {
 
         if wasRecording && !isRecording {
             stopMeterPolling()
+            if isTranscribing {
+                hudController.setMode(.transcribing)
+                hudController.show()
+            } else {
+                hudController.hide()
+            }
+            return
+        }
+
+        if !wasTranscribing && isTranscribing {
+            hudController.setMode(.transcribing)
+            hudController.show()
+            return
+        }
+
+        if wasTranscribing && !isTranscribing {
             hudController.hide()
         }
     }
@@ -203,6 +223,7 @@ final class MenuBarController: ObservableObject {
     private func startMeterPolling() {
         stopMeterPolling()
         smoothedLevel = 0.08
+        smoothedBands = Array(repeating: 0.08, count: 5)
 
         meterTask = Task { @MainActor [weak self] in
             guard let self else {
@@ -210,9 +231,24 @@ final class MenuBarController: ObservableObject {
             }
 
             while !Task.isCancelled {
-                let rawLevel = audioCapture.currentNormalizedInputLevel() ?? 0
-                smoothedLevel = (0.35 * rawLevel) + (0.65 * smoothedLevel)
-                hudController.update(level: smoothedLevel)
+                if let rawBands = audioCapture.currentEqualizerBands() {
+                    let normalizedBands: [Float]
+                    if rawBands.count >= 5 {
+                        normalizedBands = Array(rawBands.prefix(5))
+                    } else {
+                        normalizedBands = rawBands + Array(repeating: 0.04, count: 5 - rawBands.count)
+                    }
+
+                    for index in 0 ..< 5 {
+                        let clamped = min(max(normalizedBands[index], 0), 1)
+                        smoothedBands[index] = (0.32 * clamped) + (0.68 * smoothedBands[index])
+                    }
+                    hudController.update(bands: smoothedBands)
+                } else {
+                    let rawLevel = audioCapture.currentNormalizedInputLevel() ?? 0
+                    smoothedLevel = (0.55 * rawLevel) + (0.45 * smoothedLevel)
+                    hudController.update(level: smoothedLevel)
+                }
                 try? await Task.sleep(nanoseconds: 33_000_000)
             }
         }
@@ -222,10 +258,18 @@ final class MenuBarController: ObservableObject {
         meterTask?.cancel()
         meterTask = nil
         smoothedLevel = 0.08
+        smoothedBands = Array(repeating: 0.08, count: 5)
     }
 
     private func isRecordingState(_ state: DictationState) -> Bool {
         if case .recording = state {
+            return true
+        }
+        return false
+    }
+
+    private func isTranscribingState(_ state: DictationState) -> Bool {
+        if case .transcribing = state {
             return true
         }
         return false

@@ -5,7 +5,7 @@ import XCTest
 @MainActor
 final class MenuBarControllerTests: XCTestCase {
     func testRecordingStartPlaysChimeAndShowsHUD() async {
-        let mocks = makeMocks(audioLevel: 0.52)
+        let mocks = makeMocks(audioLevel: 0.52, bands: [0.12, 0.28, 0.74, 0.33, 0.14])
         let controller = makeController(mocks: mocks)
 
         controller.applyStateUpdate(.recording(Date()))
@@ -14,10 +14,12 @@ final class MenuBarControllerTests: XCTestCase {
         XCTAssertEqual(mocks.chime.playCount, 1)
         XCTAssertEqual(mocks.hud.showCount, 1)
         XCTAssertGreaterThan(mocks.hud.updateCount, 0)
+        XCTAssertTrue(mocks.hud.didReceiveBandUpdate)
+        XCTAssertEqual(mocks.hud.lastMode, .recording)
     }
 
     func testNonRecordingStateDoesNotPlayChimeOrShowHUD() {
-        let mocks = makeMocks(audioLevel: 0.15)
+        let mocks = makeMocks(audioLevel: 0.15, bands: nil)
         let controller = makeController(mocks: mocks)
 
         controller.applyStateUpdate(.error("failed"))
@@ -27,7 +29,7 @@ final class MenuBarControllerTests: XCTestCase {
     }
 
     func testRecordingExitHidesHUDAndStopsMeterUpdates() async {
-        let mocks = makeMocks(audioLevel: 0.9)
+        let mocks = makeMocks(audioLevel: 0.9, bands: [0.18, 0.42, 0.88, 0.4, 0.22])
         let controller = makeController(mocks: mocks)
 
         controller.applyStateUpdate(.recording(Date()))
@@ -38,8 +40,12 @@ final class MenuBarControllerTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 150_000_000)
         let afterStopUpdates = mocks.hud.updateCount
 
-        XCTAssertEqual(mocks.hud.hideCount, 1)
+        XCTAssertEqual(mocks.hud.hideCount, 0)
+        XCTAssertEqual(mocks.hud.lastMode, .transcribing)
         XCTAssertLessThanOrEqual(afterStopUpdates, beforeStopUpdates + 1)
+
+        controller.applyStateUpdate(.idle)
+        XCTAssertEqual(mocks.hud.hideCount, 1)
     }
 
     private func makeController(mocks: ControllerMocks) -> MenuBarController {
@@ -58,12 +64,12 @@ final class MenuBarControllerTests: XCTestCase {
         )
     }
 
-    private func makeMocks(audioLevel: Float) -> ControllerMocks {
+    private func makeMocks(audioLevel: Float, bands: [Float]?) -> ControllerMocks {
         ControllerMocks(
             permissionService: MenuMockPermissionService(),
             notifier: MenuMockNotifier(),
             fnMonitor: MenuMockFnMonitor(),
-            audioCapture: MenuMockAudioCapture(level: audioLevel),
+            audioCapture: MenuMockAudioCapture(level: audioLevel, bands: bands),
             chime: MenuMockChimeService(),
             hud: MenuMockHUDController()
         )
@@ -111,9 +117,11 @@ private final class MenuMockFnMonitor: FnKeyMonitoring {
 private final class MenuMockAudioCapture: AudioCapturing, @unchecked Sendable {
     private let outputURL: URL
     private let level: Float
+    private let bands: [Float]?
 
-    init(level: Float) {
+    init(level: Float, bands: [Float]?) {
         self.level = level
+        self.bands = bands
         self.outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("menu-audio-\(UUID().uuidString)")
             .appendingPathExtension("m4a")
@@ -123,6 +131,7 @@ private final class MenuMockAudioCapture: AudioCapturing, @unchecked Sendable {
     func start() throws {}
     func stop() throws -> URL { outputURL }
     func currentNormalizedInputLevel() -> Float? { level }
+    func currentEqualizerBands() -> [Float]? { bands }
 }
 
 private final class MenuMockTextInserter: TextInserting, @unchecked Sendable {
@@ -151,6 +160,8 @@ private final class MenuMockHUDController: RecordingHUDControlling {
     private(set) var showCount = 0
     private(set) var hideCount = 0
     private(set) var updateCount = 0
+    private(set) var didReceiveBandUpdate = false
+    private(set) var lastMode: RecordingHUDMode?
 
     func show() {
         showCount += 1
@@ -160,7 +171,16 @@ private final class MenuMockHUDController: RecordingHUDControlling {
         hideCount += 1
     }
 
+    func setMode(_ mode: RecordingHUDMode) {
+        lastMode = mode
+    }
+
     func update(level: Float) {
         updateCount += 1
+    }
+
+    func update(bands: [Float]) {
+        updateCount += 1
+        didReceiveBandUpdate = true
     }
 }

@@ -5,7 +5,9 @@ import SwiftUI
 protocol RecordingHUDControlling: AnyObject {
     func show()
     func hide()
+    func setMode(_ mode: RecordingHUDMode)
     func update(level: Float)
+    func update(bands: [Float])
 }
 
 @MainActor
@@ -15,9 +17,14 @@ final class RecordingHUDWindowController: RecordingHUDControlling {
         override var canBecomeMain: Bool { false }
     }
 
+    private final class TransparentHostingView<Content: View>: NSHostingView<Content> {
+        override var isOpaque: Bool { false }
+    }
+
     private let model = RecordingHUDModel()
+    private var mode: RecordingHUDMode = .recording
     private lazy var panel: NSPanel = {
-        let size = NSSize(width: 154, height: 46)
+        let size = panelSize(for: .recording)
         let panel = HUDPanel(
             contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -31,13 +38,22 @@ final class RecordingHUDWindowController: RecordingHUDControlling {
         panel.hidesOnDeactivate = false
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = true
+        panel.hasShadow = false
         panel.ignoresMouseEvents = true
-        panel.contentView = NSHostingView(rootView: RecordingHUDView(model: model))
+
+        let hostingView = TransparentHostingView(rootView: RecordingHUDView(model: model))
+        hostingView.wantsLayer = true
+        hostingView.layer?.backgroundColor = NSColor.clear.cgColor
+        panel.contentView = hostingView
+
+        panel.contentView?.wantsLayer = true
+        panel.contentView?.layer?.backgroundColor = NSColor.clear.cgColor
+        panel.contentView?.layer?.isOpaque = false
         return panel
     }()
 
     func show() {
+        resizePanel(for: mode)
         positionPanel()
         panel.orderFrontRegardless()
     }
@@ -46,8 +62,43 @@ final class RecordingHUDWindowController: RecordingHUDControlling {
         panel.orderOut(nil)
     }
 
+    func setMode(_ mode: RecordingHUDMode) {
+        self.mode = mode
+        model.mode = mode
+        resizePanel(for: mode)
+    }
+
     func update(level: Float) {
-        model.level = min(max(level, 0), 1)
+        let clamped = min(max(level, 0), 1)
+        model.bands = Array(repeating: clamped, count: 5)
+    }
+
+    func update(bands: [Float]) {
+        guard !bands.isEmpty else {
+            return
+        }
+
+        if bands.count >= 5 {
+            model.bands = Array(bands.prefix(5)).map { min(max($0, 0), 1) }
+        } else {
+            let padded = bands + Array(repeating: 0.04, count: 5 - bands.count)
+            model.bands = padded.map { min(max($0, 0), 1) }
+        }
+    }
+
+    private func resizePanel(for mode: RecordingHUDMode) {
+        let size = panelSize(for: mode)
+        panel.setContentSize(size)
+        positionPanel()
+    }
+
+    private func panelSize(for mode: RecordingHUDMode) -> NSSize {
+        switch mode {
+        case .recording:
+            return NSSize(width: 150, height: 36)
+        case .transcribing:
+            return NSSize(width: 246, height: 36)
+        }
     }
 
     private func positionPanel() {

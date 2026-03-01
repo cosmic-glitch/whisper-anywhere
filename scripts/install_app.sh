@@ -26,10 +26,11 @@ cat > "$APP_PATH/Contents/Info.plist" <<'PLIST'
   <key>CFBundleIdentifier</key><string>ai.nativewhisper.app</string>
   <key>CFBundleName</key><string>NativeWhisper</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>1.2</string>
-  <key>CFBundleVersion</key><string>2</string>
+  <key>CFBundleShortVersionString</key><string>1.2.1</string>
+  <key>CFBundleVersion</key><string>3</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
+  <key>LSUIElement</key><true/>
   <key>NSMicrophoneUsageDescription</key><string>NativeWhisper needs microphone access for dictation.</string>
 </dict>
 </plist>
@@ -51,5 +52,5 @@ if [[ -f "$ROOT_DIR/.env" ]]; then
   fi
 fi
 
-open "$INSTALL_PATH"
+open -g "$INSTALL_PATH"
 echo "Installed and launched $INSTALL_PATH"

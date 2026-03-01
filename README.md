@@ -4,7 +4,7 @@ Minimal macOS 14+ menu bar dictation app with strict Fn hold-to-talk behavior:
 
 - Hold `Fn` to start recording
 - Start chime plays once recording begins
-- Floating recording HUD appears at bottom-center with a live 5-bar mic equalizer
+- Floating recording HUD appears at bottom-center with a live 5-band frequency equalizer
 - Release `Fn` to stop and transcribe with OpenAI `whisper-1` (`language=en`)
 - Insert transcript into focused text field
 - If no editable field is focused, copy transcript to clipboard and notify
