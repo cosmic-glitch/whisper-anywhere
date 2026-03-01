@@ -1,52 +1,63 @@
-# NativeWhisper v1
+# Native Whisper
 
-Minimal macOS 14+ menu bar dictation app with strict Fn hold-to-talk behavior:
+Native Whisper is a simple push-to-talk dictation app for macOS.
+Hold `Fn` to speak. Release `Fn` to transcribe. Your text appears at the cursor.
 
-- Hold `Fn` to start recording
-- Start chime plays once recording begins
-- Floating recording HUD appears at bottom-center with a live 5-band frequency equalizer
-- Release `Fn` to stop and transcribe with OpenAI `whisper-1` (`language=en`)
-- Insert transcript into focused text field
-- If no editable field is focused, copy transcript to clipboard and notify
+## Why it is useful
+
+- Fast dictation without a full app window
+- Clear recording feedback with a chime and compact HUD
+- One-key interaction you can use across apps
+- No post-editing or rewriting of your words
+
+## What it does
+
+- Runs as a native menu bar app on macOS 14+
+- Starts recording while `Fn` is held
+- Shows live audio bars while recording
+- Shows `Transcribing` status after release
+- Sends audio to OpenAI `whisper-1` with `language=en`
+- Inserts transcript into the focused text field
+- Falls back to clipboard if no editable target is focused
 
 ## Requirements
 
 - macOS 14+
-- OpenAI API key in `OPENAI_API_KEY`
-- Microphone, Accessibility, and Input Monitoring permissions
+- `OPENAI_API_KEY`
+- Microphone permission
+- Accessibility permission
+- Input Monitoring permission
 
-## Run
+## Quick Start
+
+1. Add your API key to a `.env` file in the repo root:
+
+```bash
+OPENAI_API_KEY=your_key_here
+```
+
+2. Install and launch:
+
+```bash
+./scripts/install_app.sh
+```
+
+This script builds the app, installs it to `/Applications/NativeWhisper.app`,
+stops any existing Native Whisper process, and relaunches the latest build.
+
+3. Grant permissions when prompted (or from System Settings).
+
+4. Place the cursor in any text field, hold `Fn`, speak, and release `Fn`.
+
+## Run From Terminal (Optional)
 
 ```bash
 export OPENAI_API_KEY="your_key_here"
 swift run NativeWhisper
 ```
 
-## Install As App
-
-```bash
-cd nativewhisper
-./scripts/install_app.sh
-```
-
-This builds a signed app bundle, installs it into `/Applications/NativeWhisper.app`,
-copies the custom `AppIcon.icns`, loads `OPENAI_API_KEY` from `.env` into `launchctl`
-if present, and launches the app.
-
-If permissions appear as denied after an update even though the app is listed in System
-Settings, toggle the permission off/on for NativeWhisper and relaunch the app.
-
-## Tests
+## Test
 
 ```bash
 swift test
 ```
-
-`swift test` currently requires a full Xcode installation on this machine because the active
-Command Line Tools environment does not provide the `XCTest` module. Once Xcode is installed
-and selected via `xcode-select`, tests should run normally.
-
-## Notes
-
-- This environment lacked full Xcode (`xcodebuild` unavailable), so a generated `.xcodeproj` was not produced.
-- Open `Package.swift` in Xcode to run/debug as a native app.
