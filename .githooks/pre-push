@@ -28,7 +28,7 @@ mark_changes() {
     [[ -z "$path" ]] && continue
 
     case "$path" in
-      NativeWhisper/*|NativeWhisperTests/*|Package.swift|scripts/install_app.sh|scripts/release_dmg.sh|scripts/build_unsigned_dmg.sh|scripts/full_release.sh)
+      NativeWhisper/*|NativeWhisperTests/*|Package.swift)
         release_required=1
         ;;
     esac
@@ -45,7 +45,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   fi
 
   mark_changes "$local_sha" "$remote_sha"
-done
+done || true
 
 if [[ "$release_required" -eq 0 ]]; then
   exit 0

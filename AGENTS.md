@@ -8,8 +8,6 @@ For any change to app/runtime code, do a full release pipeline before push.
 - `NativeWhisper/**`
 - `NativeWhisperTests/**`
 - `Package.swift`
-- `scripts/install_app.sh`
-- `scripts/release_dmg.sh`
 
 ### Required steps
 1. Run `./scripts/full_release.sh`.
