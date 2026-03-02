@@ -1,6 +1,6 @@
-# Native Whisper
+# Whisper Anywhere
 
-Native Whisper is a simple push-to-talk dictation app for macOS.
+Whisper Anywhere is a simple push-to-talk dictation app for macOS.
 Hold `Fn` to speak. Release `Fn` to transcribe. Your text appears at the cursor.
 
 ## Why it is useful
@@ -42,8 +42,8 @@ OPENAI_API_KEY=your_key_here
 ./scripts/install_app.sh
 ```
 
-This script builds the app, installs it to `/Applications/NativeWhisper.app`,
-stops any existing Native Whisper process, and relaunches the latest build.
+This script builds the app, installs it to `/Applications/Whisper Anywhere.app`,
+stops any existing Whisper Anywhere process, and relaunches the latest build.
 
 3. Grant permissions when prompted (or from System Settings).
 

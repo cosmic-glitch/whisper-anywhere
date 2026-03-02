@@ -2,17 +2,18 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-APP_NAME="NativeWhisper.app"
+APP_NAME="Whisper Anywhere.app"
 BUILD_DIR="$ROOT_DIR/.build/release"
 APP_PATH="$ROOT_DIR/$APP_NAME"
 INSTALL_PATH="/Applications/$APP_NAME"
+LEGACY_INSTALL_PATH="/Applications/NativeWhisper.app"
 ICON_SOURCE="$ROOT_DIR/NativeWhisper/Resources/AppIcon.icns"
 
 cd "$ROOT_DIR"
 
 terminate_running_app() {
   if pgrep -x "NativeWhisper" >/dev/null 2>&1; then
-    echo "Stopping running NativeWhisper process..."
+    echo "Stopping running Whisper Anywhere process..."
     pkill -x "NativeWhisper" || true
 
     for _ in {1..20}; do
@@ -22,7 +23,7 @@ terminate_running_app() {
       sleep 0.1
     done
 
-    echo "Force stopping NativeWhisper process..."
+    echo "Force stopping Whisper Anywhere process..."
     pkill -9 -x "NativeWhisper" || true
   fi
 }
@@ -42,22 +43,23 @@ cat > "$APP_PATH/Contents/Info.plist" <<'PLIST'
 <plist version="1.0">
 <dict>
   <key>CFBundleExecutable</key><string>NativeWhisper</string>
-  <key>CFBundleIdentifier</key><string>ai.nativewhisper.app</string>
-  <key>CFBundleName</key><string>NativeWhisper</string>
+  <key>CFBundleIdentifier</key><string>ai.whisperanywhere.app</string>
+  <key>CFBundleName</key><string>Whisper Anywhere</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>1.2.2</string>
   <key>CFBundleVersion</key><string>4</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>LSUIElement</key><true/>
-  <key>NSMicrophoneUsageDescription</key><string>NativeWhisper needs microphone access for dictation.</string>
+  <key>NSMicrophoneUsageDescription</key><string>Whisper Anywhere needs microphone access for dictation.</string>
 </dict>
 </plist>
 PLIST
 
 # Keep a stable designated requirement across ad-hoc rebuilds so TCC grants are less likely
 # to be invalidated after updates.
-codesign --force --deep --sign - -r='designated => identifier "ai.nativewhisper.app"' "$APP_PATH"
+codesign --force --deep --sign - -r='designated => identifier "ai.whisperanywhere.app"' "$APP_PATH"
+rm -rf "$LEGACY_INSTALL_PATH"
 rm -rf "$INSTALL_PATH"
 cp -R "$APP_PATH" "$INSTALL_PATH"
 xattr -dr com.apple.quarantine "$INSTALL_PATH"

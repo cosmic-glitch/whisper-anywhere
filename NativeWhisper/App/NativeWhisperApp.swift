@@ -45,7 +45,7 @@ struct NativeWhisperApp: App {
                 controller.refreshPermissions()
             }
         } label: {
-            Label("NativeWhisper", systemImage: controller.menuIconName)
+            Label("Whisper Anywhere", systemImage: controller.menuIconName)
         }
         .menuBarExtraStyle(.window)
     }

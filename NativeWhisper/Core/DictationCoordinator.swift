@@ -127,7 +127,7 @@ actor DictationCoordinator {
                 let fallbackMessage = "No cursor found. Copied to clipboard."
                 clipboard.copy(transcript)
                 notifier.notify(
-                    title: "NativeWhisper",
+                    title: "Whisper Anywhere",
                     body: "No editable field focused. Transcript copied to clipboard."
                 )
                 eventDidOccur(.clipboardFallbackNotice(fallbackMessage))
@@ -205,9 +205,9 @@ actor DictationCoordinator {
 
         switch error {
         case .missingAPIKey:
-            notifier.notify(title: "NativeWhisper Error", body: "OPENAI_API_KEY is not configured.")
+            notifier.notify(title: "Whisper Anywhere Error", body: "OPENAI_API_KEY is not configured.")
         default:
-            notifier.notify(title: "NativeWhisper Error", body: message)
+            notifier.notify(title: "Whisper Anywhere Error", body: message)
         }
 
         if errorDisplayDuration > 0 {

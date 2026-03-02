@@ -1,6 +1,7 @@
 .build/
 .swiftpm/
 NativeWhisper.app/
+Whisper Anywhere.app/
 .DS_Store
 .env
 .env.*

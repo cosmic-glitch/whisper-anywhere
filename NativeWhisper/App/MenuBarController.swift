@@ -63,6 +63,8 @@ final class MenuBarController: ObservableObject {
     private let configurationPresenter: ConfigurationPresenting
     private let appDefaults: UserDefaults
     private let firstLaunchConfigurationKey: String
+    private let legacyFirstLaunchConfigurationKey: String
+    private let legacyBundleIdentifier: String
     private let stateSink: DictationStateSink
     private let eventSink: DictationEventSink
     private let coordinator: DictationCoordinator
@@ -80,7 +82,9 @@ final class MenuBarController: ObservableObject {
         apiKeyStore: APIKeyStoring = APIKeyStore.shared,
         configurationPresenter: ConfigurationPresenting = ConfigurationWindowController(),
         appDefaults: UserDefaults = .standard,
-        firstLaunchConfigurationKey: String = "NativeWhisper.DidShowConfigurationOnFirstLaunch",
+        firstLaunchConfigurationKey: String = "WhisperAnywhere.DidShowConfigurationOnFirstLaunch",
+        legacyFirstLaunchConfigurationKey: String = "NativeWhisper.DidShowConfigurationOnFirstLaunch",
+        legacyBundleIdentifier: String = "ai.nativewhisper.app",
         permissionService: PermissionProviding = PermissionService(),
         notifier: Notifying = NotificationService(),
         fnMonitor: FnKeyMonitoring = FnKeyMonitor(),
@@ -99,6 +103,8 @@ final class MenuBarController: ObservableObject {
         self.configurationPresenter = configurationPresenter
         self.appDefaults = appDefaults
         self.firstLaunchConfigurationKey = firstLaunchConfigurationKey
+        self.legacyFirstLaunchConfigurationKey = legacyFirstLaunchConfigurationKey
+        self.legacyBundleIdentifier = legacyBundleIdentifier
         self.permissionService = permissionService
         self.notifier = notifier
         self.fnMonitor = fnMonitor
@@ -198,7 +204,7 @@ final class MenuBarController: ObservableObject {
             let message = error.localizedDescription
             monitorErrorMessage = message
             applyStateUpdate(.error(message))
-            notifier.notify(title: "NativeWhisper Error", body: message)
+            notifier.notify(title: "Whisper Anywhere Error", body: message)
         }
     }
 
@@ -304,12 +310,32 @@ final class MenuBarController: ObservableObject {
     }
 
     private func showConfigurationOnFirstLaunchIfNeeded() {
+        migrateFirstLaunchFlagIfNeeded()
+
         guard !appDefaults.bool(forKey: firstLaunchConfigurationKey) else {
             return
         }
 
         appDefaults.set(true, forKey: firstLaunchConfigurationKey)
         openConfiguration()
+    }
+
+    private func migrateFirstLaunchFlagIfNeeded() {
+        if appDefaults.object(forKey: firstLaunchConfigurationKey) != nil {
+            return
+        }
+
+        if appDefaults.object(forKey: legacyFirstLaunchConfigurationKey) != nil {
+            appDefaults.set(appDefaults.bool(forKey: legacyFirstLaunchConfigurationKey), forKey: firstLaunchConfigurationKey)
+            return
+        }
+
+        guard let legacyDefaults = UserDefaults(suiteName: legacyBundleIdentifier),
+              legacyDefaults.object(forKey: legacyFirstLaunchConfigurationKey) != nil else {
+            return
+        }
+
+        appDefaults.set(legacyDefaults.bool(forKey: legacyFirstLaunchConfigurationKey), forKey: firstLaunchConfigurationKey)
     }
 
     private func syncAPIKeyStatus() {

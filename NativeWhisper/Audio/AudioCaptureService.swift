@@ -196,7 +196,7 @@ final class AudioCaptureService: NSObject, AudioCapturing, @unchecked Sendable {
         }
 
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("nativewhisper-\(UUID().uuidString)")
+            .appendingPathComponent("whisperanywhere-\(UUID().uuidString)")
             .appendingPathExtension("m4a")
 
         let settings: [String: Any] = [

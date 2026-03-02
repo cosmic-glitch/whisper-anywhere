@@ -2,15 +2,16 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-APP_NAME="NativeWhisper"
-APP_BUNDLE_NAME="${APP_NAME}.app"
+APP_PRODUCT_NAME="Whisper Anywhere"
+APP_BUNDLE_NAME="${APP_PRODUCT_NAME}.app"
+DMG_BASENAME="Whisper-Anywhere"
 EXECUTABLE_NAME="NativeWhisper"
-BUNDLE_ID="ai.nativewhisper.app"
+BUNDLE_ID="ai.whisperanywhere.app"
 MIN_MACOS_VERSION="14.0"
 ICON_SOURCE="$ROOT_DIR/NativeWhisper/Resources/AppIcon.icns"
 BUILD_DIR="$ROOT_DIR/.build/release"
 DIST_DIR="$ROOT_DIR/dist"
-VOLUME_NAME="Native Whisper"
+VOLUME_NAME="Whisper Anywhere"
 
 IDENTITY="${DEVELOPER_IDENTITY:-}"
 NOTARY_PROFILE="${NOTARY_PROFILE:-}"
@@ -21,7 +22,7 @@ KEEP_STAGING=false
 
 usage() {
   cat <<'EOF'
-Create a signed + notarized DMG for NativeWhisper.
+Create a signed + notarized DMG for Whisper Anywhere.
 
 Usage:
   ./scripts/release_dmg.sh --identity "Developer ID Application: Name (TEAMID)" [options]
@@ -44,7 +45,7 @@ Environment variable equivalents:
 Examples:
   ./scripts/release_dmg.sh \
     --identity "Developer ID Application: Your Name (ABCDE12345)" \
-    --notary-profile nativewhisper-notary \
+    --notary-profile whisperanywhere-notary \
     --version 1.2.3 \
     --build-number 7
 
@@ -123,7 +124,7 @@ fi
 
 APP_BUNDLE_PATH="$DIST_DIR/$APP_BUNDLE_NAME"
 DMG_STAGING_PATH="$DIST_DIR/dmg-root"
-DMG_PATH="$DIST_DIR/${APP_NAME}-${VERSION}.dmg"
+DMG_PATH="$DIST_DIR/${DMG_BASENAME}-${VERSION}.dmg"
 EXECUTABLE_PATH="$APP_BUNDLE_PATH/Contents/MacOS/$EXECUTABLE_NAME"
 INFO_PLIST_PATH="$APP_BUNDLE_PATH/Contents/Info.plist"
 RESOURCE_BUNDLE_PATH="$BUILD_DIR/${EXECUTABLE_NAME}_${EXECUTABLE_NAME}.bundle"
@@ -171,14 +172,14 @@ cat > "$INFO_PLIST_PATH" <<PLIST
 <dict>
   <key>CFBundleExecutable</key><string>${EXECUTABLE_NAME}</string>
   <key>CFBundleIdentifier</key><string>${BUNDLE_ID}</string>
-  <key>CFBundleName</key><string>${APP_NAME}</string>
+  <key>CFBundleName</key><string>${APP_PRODUCT_NAME}</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>${VERSION}</string>
   <key>CFBundleVersion</key><string>${BUILD_NUMBER}</string>
   <key>LSMinimumSystemVersion</key><string>${MIN_MACOS_VERSION}</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>LSUIElement</key><true/>
-  <key>NSMicrophoneUsageDescription</key><string>NativeWhisper needs microphone access for dictation.</string>
+  <key>NSMicrophoneUsageDescription</key><string>Whisper Anywhere needs microphone access for dictation.</string>
 </dict>
 </plist>
 PLIST

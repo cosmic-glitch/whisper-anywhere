@@ -25,7 +25,7 @@ final class ConfigurationWindowController: ConfigurationPresenting {
             defer: false
         )
 
-        window.title = "Native Whisper Configuration"
+        window.title = "Whisper Anywhere Configuration"
         window.isReleasedWhenClosed = false
         window.center()
 
