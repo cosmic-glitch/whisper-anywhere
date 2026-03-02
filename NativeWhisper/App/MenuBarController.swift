@@ -2,6 +2,30 @@ import AppKit
 import Foundation
 import SwiftUI
 
+enum SettingsPane {
+    case microphone
+    case accessibility
+    case inputMonitoring
+    case privacySecurity
+}
+
+enum AppReadinessStatus {
+    case ready
+    case notEnoughPermissions
+    case openAIKeyNotConfigured
+
+    var label: String {
+        switch self {
+        case .ready:
+            return "Ready"
+        case .notEnoughPermissions:
+            return "Not enough permissions"
+        case .openAIKeyNotConfigured:
+            return "OpenAI key not configured"
+        }
+    }
+}
+
 @MainActor
 final class MenuBarController: ObservableObject {
     private final class DictationStateSink: @unchecked Sendable {
@@ -27,6 +51,7 @@ final class MenuBarController: ObservableObject {
     @Published private(set) var dictationState: DictationState = .idle
     @Published private(set) var permissionSnapshot: PermissionSnapshot
     @Published private(set) var monitorErrorMessage: String?
+    @Published private(set) var apiKeyConfigured: Bool
 
     private let permissionService: PermissionProviding
     private let notifier: Notifying
@@ -34,6 +59,10 @@ final class MenuBarController: ObservableObject {
     private let chimeService: Chiming
     private let hudController: RecordingHUDControlling
     private let audioCapture: AudioCapturing
+    private let apiKeyStore: APIKeyStoring
+    private let configurationPresenter: ConfigurationPresenting
+    private let appDefaults: UserDefaults
+    private let firstLaunchConfigurationKey: String
     private let stateSink: DictationStateSink
     private let eventSink: DictationEventSink
     private let coordinator: DictationCoordinator
@@ -47,7 +76,11 @@ final class MenuBarController: ObservableObject {
     let config: AppConfig
 
     init(
-        config: AppConfig = .load(),
+        config: AppConfig? = nil,
+        apiKeyStore: APIKeyStoring = APIKeyStore.shared,
+        configurationPresenter: ConfigurationPresenting = ConfigurationWindowController(),
+        appDefaults: UserDefaults = .standard,
+        firstLaunchConfigurationKey: String = "NativeWhisper.DidShowConfigurationOnFirstLaunch",
         permissionService: PermissionProviding = PermissionService(),
         notifier: Notifying = NotificationService(),
         fnMonitor: FnKeyMonitoring = FnKeyMonitor(),
@@ -59,7 +92,13 @@ final class MenuBarController: ObservableObject {
         hudController: RecordingHUDControlling = RecordingHUDWindowController(),
         autoStart: Bool = true
     ) {
-        self.config = config
+        let resolvedConfig = config ?? AppConfig.load(apiKeyStore: apiKeyStore)
+
+        self.config = resolvedConfig
+        self.apiKeyStore = apiKeyStore
+        self.configurationPresenter = configurationPresenter
+        self.appDefaults = appDefaults
+        self.firstLaunchConfigurationKey = firstLaunchConfigurationKey
         self.permissionService = permissionService
         self.notifier = notifier
         self.fnMonitor = fnMonitor
@@ -69,8 +108,9 @@ final class MenuBarController: ObservableObject {
         self.stateSink = DictationStateSink()
         self.eventSink = DictationEventSink()
         self.permissionSnapshot = permissionService.snapshot()
+        self.apiKeyConfigured = resolvedConfig.hasAPIKey
 
-        let transcriptionClient = OpenAITranscriptionClient(config: config)
+        let transcriptionClient = OpenAITranscriptionClient(config: resolvedConfig)
         self.coordinator = DictationCoordinator(
             audioCapture: audioCapture,
             transcriptionClient: transcriptionClient,
@@ -79,7 +119,7 @@ final class MenuBarController: ObservableObject {
             clipboard: clipboard,
             permissionService: permissionService,
             notifier: notifier,
-            config: config,
+            config: resolvedConfig,
             stateDidChange: { [weak stateSink] newState in
                 stateSink?.publish(newState)
             },
@@ -107,6 +147,22 @@ final class MenuBarController: ObservableObject {
         hudMessageTask?.cancel()
     }
 
+    var readinessStatus: AppReadinessStatus {
+        if !apiKeyConfigured {
+            return .openAIKeyNotConfigured
+        }
+
+        guard hasRequiredPermissions else {
+            return .notEnoughPermissions
+        }
+
+        return .ready
+    }
+
+    var statusText: String {
+        readinessStatus.label
+    }
+
     var menuIconName: String {
         switch dictationState {
         case .idle:
@@ -122,21 +178,6 @@ final class MenuBarController: ObservableObject {
         }
     }
 
-    var statusText: String {
-        switch dictationState {
-        case .idle:
-            return "Idle"
-        case .recording:
-            return "Recording (hold Fn)"
-        case .transcribing:
-            return "Transcribing"
-        case .inserting:
-            return "Inserting"
-        case .error(let message):
-            return "Error: \(message)"
-        }
-    }
-
     func startIfNeeded() {
         guard !started else {
             return
@@ -148,6 +189,7 @@ final class MenuBarController: ObservableObject {
         }
 
         refreshPermissions()
+        showConfigurationOnFirstLaunchIfNeeded()
 
         do {
             try fnMonitor.start()
@@ -162,6 +204,7 @@ final class MenuBarController: ObservableObject {
 
     func refreshPermissions() {
         permissionSnapshot = permissionService.snapshot()
+        syncAPIKeyStatus()
     }
 
     func testPermissions() {
@@ -170,6 +213,63 @@ final class MenuBarController: ObservableObject {
             _ = permissionService.requestAccessibilityAccess()
             _ = permissionService.requestInputMonitoringAccess()
             refreshPermissions()
+        }
+    }
+
+    func openConfiguration() {
+        configurationPresenter.show(controller: self)
+    }
+
+    func currentAPIKey() -> String {
+        config.openAIKey
+    }
+
+    func saveAPIKey(_ value: String) {
+        apiKeyStore.saveAPIKey(value)
+        syncAPIKeyStatus()
+    }
+
+    func permissionLabel(for state: PermissionState) -> String {
+        switch state {
+        case .granted:
+            return "Granted"
+        case .denied:
+            return "Denied"
+        case .notDetermined:
+            return "Not Determined"
+        }
+    }
+
+    func openSystemSettings(_ pane: SettingsPane) {
+        let candidates: [String]
+
+        switch pane {
+        case .microphone:
+            candidates = [
+                "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Microphone",
+                "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"
+            ]
+        case .accessibility:
+            candidates = [
+                "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Accessibility",
+                "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+            ]
+        case .inputMonitoring:
+            candidates = [
+                "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_ListenEvent",
+                "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
+            ]
+        case .privacySecurity:
+            candidates = [
+                "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension",
+                "x-apple.systempreferences:com.apple.preference.security"
+            ]
+        }
+
+        for rawURL in candidates {
+            if let url = URL(string: rawURL), NSWorkspace.shared.open(url) {
+                return
+            }
         }
     }
 
@@ -194,6 +294,26 @@ final class MenuBarController: ObservableObject {
         case .clipboardFallbackNotice(let message):
             showTransientHUDMessage(message)
         }
+    }
+
+    private var hasRequiredPermissions: Bool {
+        permissionSnapshot.microphone == .granted &&
+            permissionSnapshot.accessibility == .granted &&
+            permissionSnapshot.inputMonitoring == .granted &&
+            monitorErrorMessage == nil
+    }
+
+    private func showConfigurationOnFirstLaunchIfNeeded() {
+        guard !appDefaults.bool(forKey: firstLaunchConfigurationKey) else {
+            return
+        }
+
+        appDefaults.set(true, forKey: firstLaunchConfigurationKey)
+        openConfiguration()
+    }
+
+    private func syncAPIKeyStatus() {
+        apiKeyConfigured = config.hasAPIKey
     }
 
     private func handleFnEvent(_ event: FnKeyEvent) {

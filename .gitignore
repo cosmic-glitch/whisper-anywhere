@@ -5,3 +5,4 @@ NativeWhisper.app/
 .env
 .env.*
 !.env.example
+.vercel

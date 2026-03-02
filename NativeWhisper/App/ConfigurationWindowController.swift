@@ -1,0 +1,35 @@
+import AppKit
+import SwiftUI
+
+@MainActor
+protocol ConfigurationPresenting: AnyObject {
+    func show(controller: MenuBarController)
+}
+
+@MainActor
+final class ConfigurationWindowController: ConfigurationPresenting {
+    private var window: NSWindow?
+
+    func show(controller: MenuBarController) {
+        let window = window ?? makeWindow()
+        window.contentView = NSHostingView(rootView: ConfigurationView(controller: controller))
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func makeWindow() -> NSWindow {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 560, height: 520),
+            styleMask: [.titled, .closable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+
+        window.title = "Native Whisper Configuration"
+        window.isReleasedWhenClosed = false
+        window.center()
+
+        self.window = window
+        return window
+    }
+}
