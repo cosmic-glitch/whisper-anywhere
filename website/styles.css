@@ -83,7 +83,7 @@ main {
 
 .hero {
   display: grid;
-  grid-template-columns: 1.2fr 0.8fr;
+  grid-template-columns: 1.45fr 0.55fr;
   gap: 1.4rem;
   align-items: center;
   padding: 2rem 0 3.3rem;
@@ -163,7 +163,7 @@ code {
 
 .hero-art {
   justify-self: center;
-  width: min(360px, 75vw);
+  width: min(280px, 58vw);
   aspect-ratio: 1 / 1;
   border: 1px solid var(--line);
   border-radius: 1.2rem;
@@ -302,6 +302,10 @@ details a {
   .hero {
     grid-template-columns: 1fr;
     gap: 1rem;
+  }
+
+  .hero-art {
+    width: min(320px, 72vw);
   }
 
   .card-grid,
