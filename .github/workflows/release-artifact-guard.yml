@@ -1,0 +1,83 @@
+name: Release Artifact Guard
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  enforce-full-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate artifact policy
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          DIST_DMG="dist/Whisper-Anywhere-unsigned.dmg"
+          WEB_DMG="website/downloads/Whisper-Anywhere-unsigned.dmg"
+
+          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          else
+            BASE_SHA="${{ github.event.before }}"
+            HEAD_SHA="${{ github.sha }}"
+          fi
+
+          if [[ "$BASE_SHA" =~ ^0+$ ]]; then
+            CHANGED="$(git diff --name-only "$(git hash-object -t tree /dev/null)" "$HEAD_SHA")"
+          else
+            CHANGED="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")"
+          fi
+
+          RELEASE_REQUIRED=0
+          DIST_CHANGED=0
+          WEB_CHANGED=0
+
+          while IFS= read -r path; do
+            [[ -z "$path" ]] && continue
+
+            case "$path" in
+              NativeWhisper/*|NativeWhisperTests/*|Package.swift|scripts/install_app.sh|scripts/release_dmg.sh|scripts/build_unsigned_dmg.sh|scripts/full_release.sh)
+                RELEASE_REQUIRED=1
+                ;;
+            esac
+
+            [[ "$path" == "$DIST_DMG" ]] && DIST_CHANGED=1
+            [[ "$path" == "$WEB_DMG" ]] && WEB_CHANGED=1
+          done <<< "$CHANGED"
+
+          if [[ "$RELEASE_REQUIRED" -eq 0 ]]; then
+            echo "No app/runtime changes detected."
+            exit 0
+          fi
+
+          if [[ "$DIST_CHANGED" -ne 1 || "$WEB_CHANGED" -ne 1 ]]; then
+            echo "App/runtime changes detected, but DMG artifacts were not both updated."
+            echo "Required files:"
+            echo "  - $DIST_DMG"
+            echo "  - $WEB_DMG"
+            exit 1
+          fi
+
+          DIST_BLOB="$(git rev-parse "$HEAD_SHA:$DIST_DMG" 2>/dev/null || true)"
+          WEB_BLOB="$(git rev-parse "$HEAD_SHA:$WEB_DMG" 2>/dev/null || true)"
+
+          if [[ -z "$DIST_BLOB" || -z "$WEB_BLOB" ]]; then
+            echo "Required DMG files missing at HEAD."
+            exit 1
+          fi
+
+          if [[ "$DIST_BLOB" != "$WEB_BLOB" ]]; then
+            echo "DMG artifacts differ; they must be byte-identical."
+            exit 1
+          fi
+
+          echo "Release artifact policy passed."

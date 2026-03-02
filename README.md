@@ -103,3 +103,26 @@ Bootstrap SQL is provided at [`website/supabase-schema.sql`](website/supabase-sc
 ```bash
 swift test
 ```
+
+## Full Release Pipeline (Required)
+
+For any app/runtime code change, always run:
+
+```bash
+./scripts/full_release.sh
+```
+
+This command:
+
+- runs tests
+- rebuilds `dist/Whisper-Anywhere-unsigned.dmg`
+- updates `website/downloads/Whisper-Anywhere-unsigned.dmg`
+- verifies both DMG files are byte-identical (SHA-256 match)
+
+Local enforcement:
+
+```bash
+./scripts/setup_git_hooks.sh
+```
+
+This installs a `pre-push` guard that blocks pushes if app code changed without both DMGs being updated and matching.
