@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Native Whisper | Push-to-talk dictation for macOS</title>
-  <meta name="description" content="Native Whisper is a focused macOS dictation app: hold Fn, speak, release, and keep writing." />
+  <title>Native Whisper | ChatGPT-level dictation in every Mac app</title>
+  <meta name="description" content="ChatGPT-level dictation in every Mac app. Hold Fn, speak, release, and text appears where your cursor is." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -26,16 +26,16 @@
   <main id="top">
     <section class="hero">
       <div class="hero-copy reveal reveal-1">
-        <p class="kicker">macOS menu bar app</p>
-        <h1>Speak naturally.<br />Keep your flow.</h1>
+        <p class="kicker">Built for every Mac app</p>
+        <h1>ChatGPT-level dictation<br />in every Mac app.</h1>
         <p class="subhead">
-          Native Whisper keeps dictation simple: hold <code>Fn</code> to record, release to transcribe, and insert text at your cursor.
+          Hold Fn, speak, and release. Native Whisper puts your words where your cursor is, so you can dictate anywhere you type.
         </p>
         <div class="hero-actions">
           <a class="btn btn-primary" href="./downloads/NativeWhisper-unsigned.dmg" download>Download DMG</a>
           <a class="btn btn-secondary" href="https://github.com/cosmic-glitch/nativewhisper" target="_blank" rel="noopener">View on GitHub</a>
         </div>
-        <p class="helper">Current build: unsigned DMG (manual Gatekeeper override may be needed).</p>
+        <p class="helper">Unsigned build for now. macOS may ask you to confirm before first launch.</p>
       </div>
       <div class="hero-art reveal reveal-2" aria-hidden="true">
         <img src="./assets/native-whisper-icon.png" alt="Native Whisper app icon" />
@@ -45,20 +45,20 @@
     <section id="features" class="section reveal reveal-2">
       <div class="section-head">
         <p class="kicker">Features</p>
-        <h2>Focused where it matters</h2>
+        <h2>Everything you need, nothing extra</h2>
       </div>
       <div class="card-grid">
         <article class="card">
-          <h3>Fn hold-to-talk</h3>
-          <p>Press and hold <code>Fn</code> to start. Release to stop and transcribe. No extra shortcuts to remember.</p>
+          <h3>Works in your apps</h3>
+          <p>Dictate in docs, chat apps, email, browsers, and most text fields on macOS.</p>
         </article>
         <article class="card">
-          <h3>Fast feedback loop</h3>
-          <p>Start chime, live mini level bars, transcribing state, and clipboard fallback message when no cursor is available.</p>
+          <h3>One-key dictation</h3>
+          <p>Press and hold Fn to record. Release Fn to transcribe and insert text.</p>
         </article>
         <article class="card">
-          <h3>Practical insertion</h3>
-          <p>Transcript is inserted into the active text target. If unavailable, text is copied to clipboard so nothing is lost.</p>
+          <h3>Clipboard fallback</h3>
+          <p>If no text field is active, your transcript is copied to clipboard so you can paste it anywhere.</p>
         </article>
       </div>
     </section>
@@ -66,16 +66,16 @@
     <section id="philosophy" class="section reveal reveal-3">
       <div class="section-head">
         <p class="kicker">Philosophy</p>
-        <h2>Private by default</h2>
+        <h2>Clear data boundaries</h2>
       </div>
       <div class="philosophy-list">
         <article>
           <h3>No stored recordings or transcripts</h3>
-          <p>Voice recordings and transcription text are not stored locally or on any third-party server.</p>
+          <p>Native Whisper does not store your recordings or transcribed text locally or on any third-party server.</p>
         </article>
         <article>
-          <h3>Only one API destination</h3>
-          <p>Your dictation data is sent only to the OpenAI Transcription API, using the API key you provide.</p>
+          <h3>Your key, your transcription request</h3>
+          <p>Your dictation data is sent only to the OpenAI Transcription API using the API key you provide.</p>
         </article>
       </div>
     </section>
@@ -87,20 +87,20 @@
       </div>
       <div class="faq-list">
         <details>
-          <summary>What does Native Whisper require?</summary>
+          <summary>What do I need to run Native Whisper?</summary>
           <p>macOS 14+, microphone permission, accessibility permission, input monitoring permission, and an OpenAI API key.</p>
         </details>
         <details>
           <summary>How do I start dictation?</summary>
-          <p>Place your cursor in any text field, hold <code>Fn</code>, speak, and release <code>Fn</code>.</p>
+          <p>Place your cursor in a text field, hold <code>Fn</code>, speak, then release <code>Fn</code>.</p>
         </details>
         <details>
-          <summary>What happens if there is no active text cursor?</summary>
-          <p>Your transcript is copied to clipboard and the on-screen status box shows: <code>No cursor found. Copied to clipboard.</code></p>
+          <summary>What if there is no active text cursor?</summary>
+          <p>Your transcript is copied to clipboard and the on-screen status says: <code>No cursor found. Copied to clipboard.</code></p>
         </details>
         <details>
-          <summary>Where can I follow development?</summary>
-          <p>All source code and updates are on <a href="https://github.com/cosmic-glitch/nativewhisper" target="_blank" rel="noopener">GitHub</a>.</p>
+          <summary>Where can I track updates?</summary>
+          <p>Source code and updates are on <a href="https://github.com/cosmic-glitch/nativewhisper" target="_blank" rel="noopener">GitHub</a>.</p>
         </details>
       </div>
     </section>
