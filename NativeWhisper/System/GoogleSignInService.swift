@@ -61,29 +61,25 @@ final class GoogleSignInService: NSObject, GoogleSignInProviding, ASWebAuthentic
                 url: startURL,
                 callbackURLScheme: callbackScheme
             ) { [weak self] callbackURL, error in
-                self?.webSession = nil
-
+                let result: Result<GoogleOAuthTokens, Error>
                 if let authError = error as? ASWebAuthenticationSessionError,
                    authError.code == .canceledLogin {
-                    continuation.resume(throwing: GoogleSignInError.cancelled)
-                    return
+                    result = .failure(GoogleSignInError.cancelled)
+                } else if let error {
+                    result = .failure(error)
+                } else if let callbackURL {
+                    do {
+                        result = .success(try Self.extractTokens(from: callbackURL))
+                    } catch {
+                        result = .failure(error)
+                    }
+                } else {
+                    result = .failure(GoogleSignInError.callbackURLMissing)
                 }
 
-                if let error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-
-                guard let callbackURL else {
-                    continuation.resume(throwing: GoogleSignInError.callbackURLMissing)
-                    return
-                }
-
-                do {
-                    let tokens = try Self.extractTokens(from: callbackURL)
-                    continuation.resume(returning: tokens)
-                } catch {
-                    continuation.resume(throwing: error)
+                Task { @MainActor [weak self] in
+                    self?.webSession = nil
+                    continuation.resume(with: result)
                 }
             }
 
