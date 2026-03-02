@@ -36,7 +36,8 @@ Create `.env` in repo root (or export these variables before launch):
 
 ```bash
 WHISPER_ANYWHERE_HOSTED_MODE=true
-BACKEND_BASE_URL=https://native-whisper.vercel.app
+BACKEND_BASE_URL=https://whisperanywhere.app
+TURNSTILE_SITE_KEY=0x4AAAAAAClFSEYtZFmDim3R
 ALLOW_LEGACY_PERSONAL_KEY_ENTRY=false
 ```
 
@@ -54,6 +55,11 @@ OPENAI_API_KEY=your_key_here
 ```
 
 This builds and installs `/Applications/Whisper Anywhere.app`, terminates any running instance, and relaunches the latest build.
+
+Hosted mode sign-in note:
+
+- `Send Code` runs an automatic Cloudflare Turnstile check in a small web view window.
+- Users no longer need to paste a manual Turnstile token.
 
 ## Backend (Vercel + Supabase)
 

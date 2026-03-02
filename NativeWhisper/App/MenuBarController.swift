@@ -86,6 +86,7 @@ final class MenuBarController: ObservableObject {
     private let sessionStore: SessionStoring
     private let deviceIdentityStore: DeviceIdentifying
     private let authClient: BackendAuthenticating?
+    private let turnstileTokenProvider: TurnstileTokenProviding?
     private let stateSink: DictationStateSink
     private let eventSink: DictationEventSink
     private let coordinator: DictationCoordinator
@@ -108,6 +109,14 @@ final class MenuBarController: ObservableObject {
 
     var backendConfigured: Bool {
         config.backendBaseURL != nil
+    }
+
+    var turnstileConfigured: Bool {
+        turnstileTokenProvider?.isConfigured ?? false
+    }
+
+    var turnstileStatusText: String {
+        turnstileConfigured ? "Enabled" : "Not configured"
     }
 
     var signedInEmail: String? {
@@ -154,6 +163,7 @@ final class MenuBarController: ObservableObject {
         sessionStore: SessionStoring = KeychainSessionStore.shared,
         deviceIdentityStore: DeviceIdentifying = DeviceIdentityStore.shared,
         authClient: BackendAuthenticating? = nil,
+        turnstileTokenProvider: TurnstileTokenProviding? = nil,
         configurationPresenter: ConfigurationPresenting = ConfigurationWindowController(),
         appDefaults: UserDefaults = .standard,
         firstLaunchConfigurationKey: String = "WhisperAnywhere.DidShowConfigurationOnFirstLaunch",
@@ -201,6 +211,15 @@ final class MenuBarController: ObservableObject {
             resolvedAuthClient = nil
         }
         self.authClient = resolvedAuthClient
+
+        if let turnstileTokenProvider {
+            self.turnstileTokenProvider = turnstileTokenProvider
+        } else if resolvedConfig.hostedModeEnabled,
+                  !resolvedConfig.turnstileSiteKey.isEmpty {
+            self.turnstileTokenProvider = TurnstileTokenService(siteKey: resolvedConfig.turnstileSiteKey)
+        } else {
+            self.turnstileTokenProvider = nil
+        }
 
         let initialSession = resolvedConfig.hostedModeEnabled ? sessionStore.loadSession() : nil
         self.authSession = initialSession
@@ -369,7 +388,7 @@ final class MenuBarController: ObservableObject {
         syncAPIKeyStatus()
     }
 
-    func sendSignInCode(email: String, turnstileToken: String) async {
+    func sendSignInCode(email: String) async {
         guard hostedModeEnabled else {
             return
         }
@@ -386,9 +405,17 @@ final class MenuBarController: ObservableObject {
         }
 
         do {
+            let token: String
+            if let turnstileTokenProvider, turnstileTokenProvider.isConfigured {
+                authStatusMessage = "Running security check..."
+                token = try await turnstileTokenProvider.fetchToken()
+            } else {
+                token = ""
+            }
+
             try await authClient.startOTP(
                 email: normalizedEmail,
-                turnstileToken: turnstileToken,
+                turnstileToken: token,
                 deviceID: deviceIdentityStore.deviceID(),
                 appVersion: appVersionString()
             )

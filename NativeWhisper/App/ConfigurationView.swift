@@ -7,7 +7,6 @@ struct ConfigurationView: View {
     @State private var saveMessage: String?
     @State private var emailDraft: String = ""
     @State private var otpDraft: String = ""
-    @State private var turnstileDraft: String = ""
     @State private var isSendingCode = false
     @State private var isVerifying = false
 
@@ -97,6 +96,16 @@ struct ConfigurationView: View {
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
 
+            Text("Turnstile: \(controller.turnstileStatusText)")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+
+            if controller.turnstileConfigured {
+                Text("Send Code will open a short security check window.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+
             if !controller.quotaSummaryText.isEmpty {
                 Text(controller.quotaSummaryText)
                     .font(.system(size: 11))
@@ -110,9 +119,6 @@ struct ConfigurationView: View {
             SecureField("Verification code", text: $otpDraft)
                 .textFieldStyle(.roundedBorder)
 
-            TextField("Turnstile token (optional when not enforced)", text: $turnstileDraft)
-                .textFieldStyle(.roundedBorder)
-
             HStack(spacing: 8) {
                 Button(isSendingCode ? "Sending..." : "Send Code") {
                     guard !isSendingCode else {
@@ -121,7 +127,7 @@ struct ConfigurationView: View {
 
                     isSendingCode = true
                     Task {
-                        await controller.sendSignInCode(email: emailDraft, turnstileToken: turnstileDraft)
+                        await controller.sendSignInCode(email: emailDraft)
                         isSendingCode = false
                     }
                 }
