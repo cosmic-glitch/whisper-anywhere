@@ -171,19 +171,14 @@ code {
 
 .hero-art {
   justify-self: center;
-  width: min(280px, 58vw);
-  aspect-ratio: 1 / 1;
-  border: 1px solid var(--line);
-  border-radius: 1.2rem;
-  background: linear-gradient(170deg, rgba(22, 46, 88, 0.75), rgba(9, 20, 42, 0.6));
-  display: grid;
-  place-items: center;
+  width: min(220px, 48vw);
 }
 
 .hero-art img {
-  width: 76%;
+  display: block;
+  width: 100%;
   height: auto;
-  border-radius: 1rem;
+  border-radius: 1.2rem;
 }
 
 .section {
