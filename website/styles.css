@@ -95,9 +95,10 @@ main {
 }
 
 .hero h1 {
+  --headline-line-height: 1.04;
   margin: 0;
   font-size: clamp(2.5rem, 5.8vw, 4.6rem);
-  line-height: 1.04;
+  line-height: var(--headline-line-height);
   letter-spacing: -0.02em;
 }
 
@@ -116,10 +117,10 @@ main {
 }
 
 .headline-logo {
-  width: clamp(36px, 5vw, 52px);
-  height: clamp(36px, 5vw, 52px);
-  margin-top: 0.14rem;
-  border-radius: 0.7rem;
+  width: calc(2em * var(--headline-line-height));
+  height: calc(2em * var(--headline-line-height));
+  margin-top: 0.04em;
+  border-radius: 0.28em;
   flex-shrink: 0;
 }
 
@@ -329,12 +330,6 @@ details a {
 
   .headline-with-logo {
     gap: 0.5rem;
-  }
-
-  .headline-logo {
-    width: 34px;
-    height: 34px;
-    margin-top: 0.1rem;
   }
 
   .hero h1 .headline-line-1 {
