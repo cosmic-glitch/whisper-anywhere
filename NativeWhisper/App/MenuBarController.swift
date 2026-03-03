@@ -93,7 +93,6 @@ final class MenuBarController: ObservableObject {
         textInserter: TextInserting = TextInsertionService(),
         focusResolver: FocusResolving = FocusResolver(),
         clipboard: ClipboardWriting = ClipboardService(),
-        dictationLogger: DictationLogging = DictationLogStore.shared,
         chimeService: Chiming = SystemChimeService(),
         hudController: RecordingHUDControlling = RecordingHUDWindowController(),
         autoStart: Bool = true
@@ -127,8 +126,6 @@ final class MenuBarController: ObservableObject {
             permissionService: permissionService,
             notifier: notifier,
             config: resolvedConfig,
-            dictationLogger: dictationLogger,
-            transcriptionProviderLabel: { "openai_direct" },
             stateDidChange: { [weak stateSink] newState in
                 stateSink?.publish(newState)
             },

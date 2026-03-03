@@ -7,24 +7,17 @@ Hold `Fn` to record, release `Fn` to transcribe, and text is inserted at the act
 
 - Fn hold-to-talk across macOS apps
 - On-device recording with immediate upload on release
-- OpenAI Whisper transcription (`whisper-1`, English only)
+- OpenAI transcription (`gpt-4o-mini-transcribe`, English only)
 - Direct text insertion with clipboard fallback when no cursor is focused
 - Menu bar UX with recording/transcribing HUD and permission guidance
 
-## Hybrid transcription modes (current)
+## Transcription path
 
-Whisper Anywhere now supports two runtime-selectable modes in Configure:
+Whisper Anywhere is now direct-only:
 
-- `Hosted`: sign in with Google and use the Whisper Anywhere backend proxy.
 - `Direct OpenAI`: use your own OpenAI key and call OpenAI directly from the app.
 
-Default route for new installs is `Hosted`.
-
-Data behavior in hosted mode:
-
-- Audio and transcript content are not persisted in app or backend storage
-- Backend keeps usage metadata (counts/duration/estimated cost) for limits and budget control
-- Backend proxies requests to OpenAI Transcriptions API
+No hosted proxy path or sign-in flow is used by the macOS app.
 
 ## Requirements
 
@@ -32,23 +25,12 @@ Data behavior in hosted mode:
 - Microphone permission
 - Accessibility permission
 - Input Monitoring permission
-- Hosted backend URL (`BACKEND_BASE_URL`) reachable from the app
 
 ## App local environment
 
 Create `.env` in repo root (or export these variables before launch):
 
 ```bash
-WHISPER_ANYWHERE_HOSTED_MODE=true
-BACKEND_BASE_URL=https://whisperanywhere.app
-GOOGLE_AUTH_CALLBACK_URL=whisperanywhere://auth/callback
-ALLOW_LEGACY_PERSONAL_KEY_ENTRY=false
-```
-
-Optional fallback for one-release compatibility:
-
-```bash
-# Only used when WHISPER_ANYWHERE_HOSTED_MODE=false
 OPENAI_API_KEY=your_key_here
 ```
 
@@ -59,11 +41,6 @@ OPENAI_API_KEY=your_key_here
 ```
 
 This builds and installs `/Applications/Whisper Anywhere.app`, terminates any running instance, and relaunches the latest build.
-
-Hosted mode sign-in note:
-
-- The app opens a secure Google sign-in window.
-- Supabase Google Auth must allow callback URL: `whisperanywhere://auth/callback`.
 
 ## Backend (Vercel + Supabase)
 
@@ -98,7 +75,7 @@ Configure these Vercel environment variables:
 - `TX_DEVICE_WINDOW_SECONDS`
 - `TX_DEVICE_LIMIT`
 
-Direct mode does not require backend sign-in.
+The website and backend routes are optional for app distribution and hosted experiments.
 
 Supabase tables expected by backend:
 
