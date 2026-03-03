@@ -1,6 +1,6 @@
 import CoreGraphics
 import XCTest
-@testable import NativeWhisper
+@testable import WhisperAnywhere
 
 final class FnKeyMonitorTests: XCTestCase {
     func testFnPressAndReleaseEvents() {

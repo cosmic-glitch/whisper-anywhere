@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-final class NativeWhisperAppDelegate: NSObject, NSApplicationDelegate {
+final class WhisperAnywhereAppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
     }
@@ -12,8 +12,8 @@ final class NativeWhisperAppDelegate: NSObject, NSApplicationDelegate {
 }
 
 @main
-struct NativeWhisperApp: App {
-    @NSApplicationDelegateAdaptor(NativeWhisperAppDelegate.self) private var appDelegate
+struct WhisperAnywhereApp: App {
+    @NSApplicationDelegateAdaptor(WhisperAnywhereAppDelegate.self) private var appDelegate
     @StateObject private var controller = MenuBarController()
 
     var body: some Scene {

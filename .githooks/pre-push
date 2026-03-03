@@ -28,7 +28,7 @@ mark_changes() {
     [[ -z "$path" ]] && continue
 
     case "$path" in
-      NativeWhisper/*|NativeWhisperTests/*|Package.swift)
+      WhisperAnywhere/*|WhisperAnywhereTests/*|Package.swift)
         release_required=1
         ;;
     esac

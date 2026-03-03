@@ -7,25 +7,33 @@ BUILD_DIR="$ROOT_DIR/.build/release"
 APP_PATH="$ROOT_DIR/$APP_NAME"
 INSTALL_PATH="/Applications/$APP_NAME"
 LEGACY_INSTALL_PATH="/Applications/NativeWhisper.app"
-ICON_SOURCE="$ROOT_DIR/NativeWhisper/Resources/AppIcon.icns"
+ICON_SOURCE="$ROOT_DIR/WhisperAnywhere/Resources/AppIcon.icns"
 
 cd "$ROOT_DIR"
 
-terminate_running_app() {
-  if pgrep -x "NativeWhisper" >/dev/null 2>&1; then
-    echo "Stopping running Whisper Anywhere process..."
-    pkill -x "NativeWhisper" || true
+terminate_process_by_name() {
+  local process_name="$1"
+
+  if pgrep -x "$process_name" >/dev/null 2>&1; then
+    echo "Stopping running process: $process_name"
+    pkill -x "$process_name" || true
 
     for _ in {1..20}; do
-      if ! pgrep -x "NativeWhisper" >/dev/null 2>&1; then
+      if ! pgrep -x "$process_name" >/dev/null 2>&1; then
         return
       fi
       sleep 0.1
     done
 
-    echo "Force stopping Whisper Anywhere process..."
-    pkill -9 -x "NativeWhisper" || true
+    echo "Force stopping process: $process_name"
+    pkill -9 -x "$process_name" || true
   fi
+}
+
+terminate_running_app() {
+  terminate_process_by_name "WhisperAnywhere"
+  # Cleanly migrate users coming from old executable naming.
+  terminate_process_by_name "NativeWhisper"
 }
 
 swift build -c release
@@ -34,7 +42,7 @@ terminate_running_app
 
 rm -rf "$APP_PATH"
 mkdir -p "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Resources"
-cp "$BUILD_DIR/NativeWhisper" "$APP_PATH/Contents/MacOS/"
+cp "$BUILD_DIR/WhisperAnywhere" "$APP_PATH/Contents/MacOS/"
 cp "$ICON_SOURCE" "$APP_PATH/Contents/Resources/AppIcon.icns"
 
 cat > "$APP_PATH/Contents/Info.plist" <<'PLIST'
@@ -42,7 +50,7 @@ cat > "$APP_PATH/Contents/Info.plist" <<'PLIST'
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleExecutable</key><string>NativeWhisper</string>
+  <key>CFBundleExecutable</key><string>WhisperAnywhere</string>
   <key>CFBundleIdentifier</key><string>ai.whisperanywhere.app</string>
   <key>CFBundleName</key><string>Whisper Anywhere</string>
   <key>CFBundlePackageType</key><string>APPL</string>

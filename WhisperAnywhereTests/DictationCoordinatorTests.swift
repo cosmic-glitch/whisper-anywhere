@@ -1,6 +1,6 @@
 import Foundation
 import XCTest
-@testable import NativeWhisper
+@testable import WhisperAnywhere
 
 final class DictationCoordinatorTests: XCTestCase {
     func testHoldAndReleaseTranscribesAndInserts() async {

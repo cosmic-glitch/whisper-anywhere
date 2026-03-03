@@ -1,6 +1,6 @@
 import Foundation
 import XCTest
-@testable import NativeWhisper
+@testable import WhisperAnywhere
 
 @MainActor
 final class MenuBarControllerTests: XCTestCase {

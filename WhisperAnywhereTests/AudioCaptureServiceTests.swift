@@ -1,5 +1,5 @@
 import XCTest
-@testable import NativeWhisper
+@testable import WhisperAnywhere
 
 final class AudioCaptureServiceTests: XCTestCase {
     func testInactiveServiceReturnsNilLevels() {

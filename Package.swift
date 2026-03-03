@@ -2,25 +2,25 @@
 import PackageDescription
 
 let package = Package(
-    name: "NativeWhisper",
+    name: "WhisperAnywhere",
     platforms: [
         .macOS(.v14)
     ],
     products: [
-        .executable(name: "NativeWhisper", targets: ["NativeWhisper"])
+        .executable(name: "WhisperAnywhere", targets: ["WhisperAnywhere"])
     ],
     targets: [
         .executableTarget(
-            name: "NativeWhisper",
-            path: "NativeWhisper",
+            name: "WhisperAnywhere",
+            path: "WhisperAnywhere",
             resources: [
                 .process("Resources")
             ]
         ),
         .testTarget(
-            name: "NativeWhisperTests",
-            dependencies: ["NativeWhisper"],
-            path: "NativeWhisperTests"
+            name: "WhisperAnywhereTests",
+            dependencies: ["WhisperAnywhere"],
+            path: "WhisperAnywhereTests"
         )
     ]
 )

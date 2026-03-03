@@ -45,7 +45,7 @@ jobs:
             [[ -z "$path" ]] && continue
 
             case "$path" in
-              NativeWhisper/*|NativeWhisperTests/*|Package.swift)
+              WhisperAnywhere/*|WhisperAnywhereTests/*|Package.swift)
                 RELEASE_REQUIRED=1
                 ;;
             esac

@@ -126,14 +126,14 @@ private func writePNG(_ image: NSImage, to url: URL) throws {
         let bitmap = NSBitmapImageRep(data: tiffData),
         let pngData = bitmap.representation(using: .png, properties: [:])
     else {
-        throw NSError(domain: "NativeWhisperIcon", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to encode PNG"])
+        throw NSError(domain: "WhisperAnywhereIcon", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to encode PNG"])
     }
 
     try pngData.write(to: url)
 }
 
 let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-let iconsetURL = cwd.appendingPathComponent("NativeWhisper/Resources/AppIcon.iconset")
+let iconsetURL = cwd.appendingPathComponent("WhisperAnywhere/Resources/AppIcon.iconset")
 let outputURL = iconsetURL.appendingPathComponent("icon_512x512@2x.png")
 
 let icon = drawIcon(size: 1024)
