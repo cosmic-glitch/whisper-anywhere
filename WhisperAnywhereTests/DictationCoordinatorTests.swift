@@ -7,7 +7,6 @@ final class DictationCoordinatorTests: XCTestCase {
         let audio = MockAudioCapture()
         let transcriber = MockTranscriber(transcript: "hello world")
         let inserter = MockTextInserter()
-        let focus = MockFocusResolver(isEditable: true)
         let clipboard = MockClipboardService()
         let permissions = MockPermissionService(
             snapshot: PermissionSnapshot(microphone: .granted, accessibility: .granted, inputMonitoring: .granted)
@@ -18,7 +17,6 @@ final class DictationCoordinatorTests: XCTestCase {
             audioCapture: audio,
             transcriptionClient: transcriber,
             textInserter: inserter,
-            focusResolver: focus,
             clipboard: clipboard,
             permissionService: permissions,
             notifier: notifier,
@@ -40,11 +38,10 @@ final class DictationCoordinatorTests: XCTestCase {
         XCTAssertEqual(state, .idle)
     }
 
-    func testNoEditableFocusFallsBackToClipboard() async {
+    func testNoEditableFocusStillAttemptsInsertion() async {
         let audio = MockAudioCapture()
         let transcriber = MockTranscriber(transcript: "clipboard text")
         let inserter = MockTextInserter()
-        let focus = MockFocusResolver(isEditable: false)
         let clipboard = MockClipboardService()
         let events = MockEventCollector()
         let permissions = MockPermissionService(
@@ -56,7 +53,43 @@ final class DictationCoordinatorTests: XCTestCase {
             audioCapture: audio,
             transcriptionClient: transcriber,
             textInserter: inserter,
-            focusResolver: focus,
+            clipboard: clipboard,
+            permissionService: permissions,
+            notifier: notifier,
+            config: AppConfig(openAIKey: "test-key", model: "whisper-1", language: "en"),
+            minimumPressDuration: 0,
+            errorDisplayDuration: 0,
+            stateDidChange: { _ in },
+            eventDidOccur: { event in
+                events.append(event)
+            }
+        )
+
+        await coordinator.handleFnPressed()
+        await coordinator.handleFnReleased()
+
+        XCTAssertEqual(inserter.insertedTexts, ["clipboard text"])
+        XCTAssertEqual(clipboard.copiedTexts.count, 0)
+        XCTAssertFalse(notifier.messages.contains(where: { $0.body.contains("copied to clipboard") }))
+        XCTAssertFalse(events.contains(.clipboardFallbackNotice("Could not insert text. Copied to clipboard.")))
+    }
+
+    func testInsertionFailureFallsBackToClipboard() async {
+        let audio = MockAudioCapture()
+        let transcriber = MockTranscriber(transcript: "clipboard text")
+        let inserter = MockTextInserter()
+        inserter.error = TextInsertionServiceError.eventCreationFailed
+        let clipboard = MockClipboardService()
+        let events = MockEventCollector()
+        let permissions = MockPermissionService(
+            snapshot: PermissionSnapshot(microphone: .granted, accessibility: .granted, inputMonitoring: .granted)
+        )
+        let notifier = MockNotifier()
+
+        let coordinator = DictationCoordinator(
+            audioCapture: audio,
+            transcriptionClient: transcriber,
+            textInserter: inserter,
             clipboard: clipboard,
             permissionService: permissions,
             notifier: notifier,
@@ -75,14 +108,13 @@ final class DictationCoordinatorTests: XCTestCase {
         XCTAssertEqual(inserter.insertedTexts.count, 0)
         XCTAssertEqual(clipboard.copiedTexts, ["clipboard text"])
         XCTAssertTrue(notifier.messages.contains(where: { $0.body.contains("copied to clipboard") }))
-        XCTAssertTrue(events.contains(.clipboardFallbackNotice("No cursor found. Copied to clipboard.")))
+        XCTAssertTrue(events.contains(.clipboardFallbackNotice("Could not insert text. Copied to clipboard.")))
     }
 
     func testShortPressSkipsTranscription() async {
         let audio = MockAudioCapture()
         let transcriber = MockTranscriber(transcript: "should not be used")
         let inserter = MockTextInserter()
-        let focus = MockFocusResolver(isEditable: true)
         let clipboard = MockClipboardService()
         let permissions = MockPermissionService(
             snapshot: PermissionSnapshot(microphone: .granted, accessibility: .granted, inputMonitoring: .granted)
@@ -93,7 +125,6 @@ final class DictationCoordinatorTests: XCTestCase {
             audioCapture: audio,
             transcriptionClient: transcriber,
             textInserter: inserter,
-            focusResolver: focus,
             clipboard: clipboard,
             permissionService: permissions,
             notifier: notifier,
@@ -117,7 +148,6 @@ final class DictationCoordinatorTests: XCTestCase {
         let audio = MockAudioCapture()
         let transcriber = MockTranscriber(transcript: "unused")
         let inserter = MockTextInserter()
-        let focus = MockFocusResolver(isEditable: true)
         let clipboard = MockClipboardService()
         let permissions = MockPermissionService(
             snapshot: PermissionSnapshot(microphone: .granted, accessibility: .granted, inputMonitoring: .granted)
@@ -128,7 +158,6 @@ final class DictationCoordinatorTests: XCTestCase {
             audioCapture: audio,
             transcriptionClient: transcriber,
             textInserter: inserter,
-            focusResolver: focus,
             clipboard: clipboard,
             permissionService: permissions,
             notifier: notifier,
@@ -212,18 +241,6 @@ private final class MockTextInserter: TextInserting, @unchecked Sendable {
             throw error
         }
         insertedTexts.append(text)
-    }
-}
-
-private final class MockFocusResolver: FocusResolving, @unchecked Sendable {
-    let isEditable: Bool
-
-    init(isEditable: Bool) {
-        self.isEditable = isEditable
-    }
-
-    func isEditableElementFocused() -> Bool {
-        isEditable
     }
 }
 

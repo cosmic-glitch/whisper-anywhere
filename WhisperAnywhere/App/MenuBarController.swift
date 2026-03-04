@@ -73,7 +73,10 @@ final class MenuBarController: ObservableObject {
     private var meterTask: Task<Void, Never>?
     private var hudMessageTask: Task<Void, Never>?
     private var smoothedLevel: Float = 0.08
-    private var smoothedBands: [Float] = Array(repeating: 0.08, count: 5)
+    private var smoothedBands: [Float] = Array(
+        repeating: RecordingHUDModel.waveformFloor,
+        count: RecordingHUDModel.waveformSampleCount
+    )
     private var started = false
 
     let config: AppConfig
@@ -91,7 +94,6 @@ final class MenuBarController: ObservableObject {
         fnMonitor: FnKeyMonitoring = FnKeyMonitor(),
         audioCapture: AudioCapturing = AudioCaptureService(),
         textInserter: TextInserting = TextInsertionService(),
-        focusResolver: FocusResolving = FocusResolver(),
         clipboard: ClipboardWriting = ClipboardService(),
         chimeService: Chiming = SystemChimeService(),
         hudController: RecordingHUDControlling = RecordingHUDWindowController(),
@@ -121,7 +123,6 @@ final class MenuBarController: ObservableObject {
             audioCapture: audioCapture,
             transcriptionClient: OpenAITranscriptionClient(config: resolvedConfig),
             textInserter: textInserter,
-            focusResolver: focusResolver,
             clipboard: clipboard,
             permissionService: permissionService,
             notifier: notifier,
@@ -449,7 +450,10 @@ final class MenuBarController: ObservableObject {
     private func startMeterPolling() {
         stopMeterPolling()
         smoothedLevel = 0.08
-        smoothedBands = Array(repeating: 0.08, count: 5)
+        smoothedBands = Array(
+            repeating: RecordingHUDModel.waveformFloor,
+            count: RecordingHUDModel.waveformSampleCount
+        )
 
         meterTask = Task { @MainActor [weak self] in
             guard let self else {
@@ -457,25 +461,16 @@ final class MenuBarController: ObservableObject {
             }
 
             while !Task.isCancelled {
-                if let rawBands = audioCapture.currentEqualizerBands() {
-                    let normalizedBands: [Float]
-                    if rawBands.count >= 5 {
-                        normalizedBands = Array(rawBands.prefix(5))
-                    } else {
-                        normalizedBands = rawBands + Array(repeating: 0.04, count: 5 - rawBands.count)
-                    }
+                let instantaneousLevel = resolvedInstantaneousLevel()
+                smoothedLevel = (0.4 * instantaneousLevel) + (0.6 * smoothedLevel)
 
-                    for index in 0 ..< 5 {
-                        let clamped = min(max(normalizedBands[index], 0), 1)
-                        smoothedBands[index] = (0.32 * clamped) + (0.68 * smoothedBands[index])
-                    }
-                    hudController.update(bands: smoothedBands)
-                } else {
-                    let rawLevel = audioCapture.currentNormalizedInputLevel() ?? 0
-                    smoothedLevel = (0.55 * rawLevel) + (0.45 * smoothedLevel)
-                    hudController.update(level: smoothedLevel)
+                smoothedBands.append(max(smoothedLevel, RecordingHUDModel.waveformFloor))
+                if smoothedBands.count > RecordingHUDModel.waveformSampleCount {
+                    smoothedBands.removeFirst(smoothedBands.count - RecordingHUDModel.waveformSampleCount)
                 }
-                try? await Task.sleep(nanoseconds: 33_000_000)
+
+                hudController.update(bands: smoothedBands)
+                try? await Task.sleep(nanoseconds: 40_000_000)
             }
         }
     }
@@ -484,7 +479,21 @@ final class MenuBarController: ObservableObject {
         meterTask?.cancel()
         meterTask = nil
         smoothedLevel = 0.08
-        smoothedBands = Array(repeating: 0.08, count: 5)
+        smoothedBands = Array(
+            repeating: RecordingHUDModel.waveformFloor,
+            count: RecordingHUDModel.waveformSampleCount
+        )
+    }
+
+    private func resolvedInstantaneousLevel() -> Float {
+        if let rawBands = audioCapture.currentEqualizerBands(), !rawBands.isEmpty {
+            let clamped = rawBands.map { min(max($0, 0), 1) }
+            let average = clamped.reduce(0, +) / Float(clamped.count)
+            let peak = clamped.max() ?? average
+            return (0.65 * peak) + (0.35 * average)
+        }
+
+        return min(max(audioCapture.currentNormalizedInputLevel() ?? 0, 0), 1)
     }
 
     private func isRecordingState(_ state: DictationState) -> Bool {

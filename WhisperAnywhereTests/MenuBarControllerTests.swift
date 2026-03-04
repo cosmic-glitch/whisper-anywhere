@@ -115,7 +115,6 @@ final class MenuBarControllerTests: XCTestCase {
             fnMonitor: mocks.fnMonitor,
             audioCapture: mocks.audioCapture,
             textInserter: MenuMockTextInserter(),
-            focusResolver: MenuMockFocusResolver(),
             clipboard: MenuMockClipboard(),
             chimeService: mocks.chime,
             hudController: mocks.hud,
@@ -195,10 +194,6 @@ private final class MenuMockAudioCapture: AudioCapturing, @unchecked Sendable {
 
 private final class MenuMockTextInserter: TextInserting, @unchecked Sendable {
     func insert(_ text: String) throws {}
-}
-
-private final class MenuMockFocusResolver: FocusResolving, @unchecked Sendable {
-    func isEditableElementFocused() -> Bool { true }
 }
 
 private final class MenuMockClipboard: ClipboardWriting, @unchecked Sendable {

@@ -39,7 +39,6 @@ actor DictationCoordinator {
     private let audioCapture: AudioCapturing
     private let transcriptionClient: Transcribing
     private let textInserter: TextInserting
-    private let focusResolver: FocusResolving
     private let clipboard: ClipboardWriting
     private let permissionService: PermissionProviding
     private let notifier: Notifying
@@ -56,7 +55,6 @@ actor DictationCoordinator {
         audioCapture: AudioCapturing,
         transcriptionClient: Transcribing,
         textInserter: TextInserting,
-        focusResolver: FocusResolving,
         clipboard: ClipboardWriting,
         permissionService: PermissionProviding,
         notifier: Notifying,
@@ -69,7 +67,6 @@ actor DictationCoordinator {
         self.audioCapture = audioCapture
         self.transcriptionClient = transcriptionClient
         self.textInserter = textInserter
-        self.focusResolver = focusResolver
         self.clipboard = clipboard
         self.permissionService = permissionService
         self.notifier = notifier
@@ -121,14 +118,14 @@ actor DictationCoordinator {
             let transcript = try await transcriptionClient.transcribe(audioURL: audioURL)
 
             setState(.inserting)
-            if focusResolver.isEditableElementFocused() {
+            do {
                 try textInserter.insert(transcript)
-            } else {
-                let fallbackMessage = "No cursor found. Copied to clipboard."
+            } catch {
+                let fallbackMessage = "Could not insert text. Copied to clipboard."
                 clipboard.copy(transcript)
                 notifier.notify(
                     title: "Whisper Anywhere",
-                    body: "No editable field focused. Transcript copied to clipboard."
+                    body: "Could not insert into the active field. Transcript copied to clipboard."
                 )
                 eventDidOccur(.clipboardFallbackNotice(fallbackMessage))
             }

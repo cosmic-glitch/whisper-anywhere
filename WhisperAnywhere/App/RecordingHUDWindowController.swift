@@ -70,7 +70,7 @@ final class RecordingHUDWindowController: RecordingHUDControlling {
 
     func update(level: Float) {
         let clamped = min(max(level, 0), 1)
-        model.bands = Array(repeating: clamped, count: 5)
+        model.bands = Array(repeating: clamped, count: RecordingHUDModel.waveformSampleCount)
     }
 
     func update(bands: [Float]) {
@@ -78,10 +78,13 @@ final class RecordingHUDWindowController: RecordingHUDControlling {
             return
         }
 
-        if bands.count >= 5 {
-            model.bands = Array(bands.prefix(5)).map { min(max($0, 0), 1) }
+        if bands.count >= RecordingHUDModel.waveformSampleCount {
+            model.bands = Array(bands.suffix(RecordingHUDModel.waveformSampleCount)).map { min(max($0, 0), 1) }
         } else {
-            let padded = bands + Array(repeating: 0.04, count: 5 - bands.count)
+            let padded = bands + Array(
+                repeating: RecordingHUDModel.waveformFloor,
+                count: RecordingHUDModel.waveformSampleCount - bands.count
+            )
             model.bands = padded.map { min(max($0, 0), 1) }
         }
     }
@@ -95,11 +98,11 @@ final class RecordingHUDWindowController: RecordingHUDControlling {
     private func panelSize(for mode: RecordingHUDMode) -> NSSize {
         switch mode {
         case .recording:
-            return NSSize(width: 150, height: 36)
+            return NSSize(width: 500, height: 42)
         case .transcribing:
-            return NSSize(width: 210, height: 36)
+            return NSSize(width: 250, height: 40)
         case .message:
-            return NSSize(width: 290, height: 36)
+            return NSSize(width: 340, height: 40)
         }
     }
 
