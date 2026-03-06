@@ -31,8 +31,8 @@ final class MenuBarController: ObservableObject {
     private final class DictationStateSink: @unchecked Sendable {
         weak var controller: MenuBarController?
 
-        func publish(_ state: DictationState) {
-            Task { @MainActor [weak controller] in
+        func publish(_ state: DictationState) async {
+            await MainActor.run { [weak controller] in
                 controller?.applyStateUpdate(state)
             }
         }
@@ -41,8 +41,8 @@ final class MenuBarController: ObservableObject {
     private final class DictationEventSink: @unchecked Sendable {
         weak var controller: MenuBarController?
 
-        func publish(_ event: DictationEvent) {
-            Task { @MainActor [weak controller] in
+        func publish(_ event: DictationEvent) async {
+            await MainActor.run { [weak controller] in
                 controller?.applyEventUpdate(event)
             }
         }
@@ -125,6 +125,7 @@ final class MenuBarController: ObservableObject {
         self.coordinator = DictationCoordinator(
             audioCapture: audioCapture,
             transcriptionClient: OpenAITranscriptionClient(config: resolvedConfig),
+            transcriptionLogStore: FileTranscriptionLogStore(),
             textEditor: resolvedTextEditor,
             textInserter: textInserter,
             clipboard: clipboard,
@@ -133,10 +134,10 @@ final class MenuBarController: ObservableObject {
             notifier: notifier,
             config: resolvedConfig,
             stateDidChange: { [weak stateSink] newState in
-                stateSink?.publish(newState)
+                await stateSink?.publish(newState)
             },
             eventDidOccur: { [weak eventSink] event in
-                eventSink?.publish(event)
+                await eventSink?.publish(event)
             }
         )
 

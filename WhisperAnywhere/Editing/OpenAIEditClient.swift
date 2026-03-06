@@ -36,6 +36,9 @@ enum OpenAIEditError: LocalizedError, Equatable {
 
 struct OpenAIEditClient: TextEditing {
     private static let logger = Logger(subsystem: "ai.whisperanywhere.app", category: "OpenAIEditClient")
+    private static let requestLogURL = FileManager.default
+        .homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/Logs/WhisperAnywhere/edit-request.log")
 
     private struct ChatMessage: Codable {
         let role: String
@@ -76,6 +79,7 @@ struct OpenAIEditClient: TextEditing {
 
     func edit(selectedText: String, instructions: String) async throws -> String {
         let request = try makeRequest(selectedText: selectedText, instructions: instructions)
+        Self.persistRequestLog(for: request)
         Self.logger.info(
             "Submitting edit request model=gpt-5-nano selectedChars=\(selectedText.count, privacy: .public) instructionChars=\(instructions.count, privacy: .public)"
         )
@@ -164,5 +168,55 @@ struct OpenAIEditClient: TextEditing {
         }
 
         return "keys=[\(topLevelKeys)]"
+    }
+
+    private static func persistRequestLog(for request: URLRequest) {
+        guard let url = request.url?.absoluteString,
+              let method = request.httpMethod,
+              let body = request.httpBody,
+              let formattedBody = formattedJSONString(from: body) else {
+            logger.error("Edit request logging skipped: request body unavailable")
+            return
+        }
+
+        let timestamp = ISO8601DateFormatter().string(from: Date())
+        let entry = """
+        === \(timestamp) ===
+        \(method) \(url)
+        \(formattedBody)
+
+        """
+
+        do {
+            let logURL = requestLogURL
+            let directoryURL = logURL.deletingLastPathComponent()
+            try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+
+            if FileManager.default.fileExists(atPath: logURL.path) {
+                let handle = try FileHandle(forWritingTo: logURL)
+                defer { try? handle.close() }
+                try handle.seekToEnd()
+                try handle.write(contentsOf: Data(entry.utf8))
+            } else {
+                try Data(entry.utf8).write(to: logURL, options: .atomic)
+            }
+
+            logger.info(
+                "Persisted edit request payload bytes=\(body.count, privacy: .public) path=\(logURL.path, privacy: .public)"
+            )
+        } catch {
+            logger.error("Failed to persist edit request payload error=\(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private static func formattedJSONString(from data: Data) -> String? {
+        guard let object = try? JSONSerialization.jsonObject(with: data),
+              JSONSerialization.isValidJSONObject(object),
+              let prettyData = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys]),
+              let string = String(data: prettyData, encoding: .utf8) else {
+            return String(data: data, encoding: .utf8)
+        }
+
+        return string
     }
 }

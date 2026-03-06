@@ -51,6 +51,7 @@ actor DictationCoordinator {
     private let logger = Logger(subsystem: "ai.whisperanywhere.app", category: "DictationCoordinator")
     private let audioCapture: AudioCapturing
     private let transcriptionClient: Transcribing
+    private let transcriptionLogStore: TranscriptionLogPersisting
     private let textEditor: TextEditing
     private let textInserter: TextInserting
     private let clipboard: ClipboardWriting
@@ -60,8 +61,8 @@ actor DictationCoordinator {
     private let config: AppConfig
     private let minimumPressDuration: TimeInterval
     private let errorDisplayDuration: UInt64
-    private let stateDidChange: @Sendable (DictationState) -> Void
-    private let eventDidOccur: @Sendable (DictationEvent) -> Void
+    private let stateDidChange: @Sendable (DictationState) async -> Void
+    private let eventDidOccur: @Sendable (DictationEvent) async -> Void
 
     private var state: DictationState = .idle
     private var recordingURL: URL?
@@ -70,6 +71,7 @@ actor DictationCoordinator {
     init(
         audioCapture: AudioCapturing,
         transcriptionClient: Transcribing,
+        transcriptionLogStore: TranscriptionLogPersisting = NoopTranscriptionLogStore(),
         textEditor: TextEditing = NoopTextEditor(),
         textInserter: TextInserting,
         clipboard: ClipboardWriting,
@@ -79,11 +81,12 @@ actor DictationCoordinator {
         config: AppConfig,
         minimumPressDuration: TimeInterval = 0.15,
         errorDisplayDuration: UInt64 = 1_200_000_000,
-        stateDidChange: @escaping @Sendable (DictationState) -> Void,
-        eventDidOccur: @escaping @Sendable (DictationEvent) -> Void = { _ in }
+        stateDidChange: @escaping @Sendable (DictationState) async -> Void,
+        eventDidOccur: @escaping @Sendable (DictationEvent) async -> Void = { _ in }
     ) {
         self.audioCapture = audioCapture
         self.transcriptionClient = transcriptionClient
+        self.transcriptionLogStore = transcriptionLogStore
         self.textEditor = textEditor
         self.textInserter = textInserter
         self.clipboard = clipboard
@@ -110,7 +113,7 @@ actor DictationCoordinator {
             try await ensureReadyToRecord()
             sessionContext = await resolvedSessionContext()
             try audioCapture.start()
-            setState(.recording(Date(), modeForSessionContext(sessionContext)))
+            await setState(.recording(Date(), modeForSessionContext(sessionContext)))
             logger.info("Fn pressed: started recording session mode=\(String(describing: self.modeForSessionContext(self.sessionContext)), privacy: .public)")
         } catch let error as DictationError {
             sessionContext = .dictation
@@ -140,32 +143,34 @@ actor DictationCoordinator {
                 try? FileManager.default.removeItem(at: audioURL)
                 recordingURL = nil
                 sessionContext = .dictation
-                setState(.idle)
+                await setState(.idle)
                 return
             }
 
-            setState(.transcribing)
+            await setState(.transcribing)
             let transcriptionStartedAt = ContinuousClock.now
             let transcript: String
             do {
                 transcript = try await transcriptionClient.transcribe(audioURL: audioURL)
             } catch {
                 let elapsed = durationMilliseconds(since: transcriptionStartedAt)
+                transcriptionLogStore.persistFailure(errorDescription: error.localizedDescription, durationMs: elapsed)
                 logger.error("Transcription call failed durationMs=\(elapsed, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
                 throw error
             }
             let transcriptionElapsed = durationMilliseconds(since: transcriptionStartedAt)
+            transcriptionLogStore.persistSuccess(transcript: transcript, durationMs: transcriptionElapsed)
             logger.info("Transcription call succeeded durationMs=\(transcriptionElapsed, privacy: .public)")
             logger.info("Transcription complete transcriptChars=\(transcript.count, privacy: .public)")
             let insertionText = await resolveInsertionText(transcript: transcript, session: activeSession)
 
-            setState(.inserting)
-            insertOrFallback(insertionText)
+            await setState(.inserting)
+            await insertOrFallback(insertionText)
 
             try? FileManager.default.removeItem(at: audioURL)
             recordingURL = nil
             sessionContext = .dictation
-            setState(.idle)
+            await setState(.idle)
         } catch let error as DictationError {
             sessionContext = .dictation
             logger.error("Fn released: dictation pipeline failed error=\(error.localizedDescription, privacy: .public)")
@@ -239,7 +244,7 @@ actor DictationCoordinator {
 
     private func transitionToError(_ error: DictationError) async {
         let message = error.localizedDescription
-        setState(.error(message))
+        await setState(.error(message))
 
         switch error {
         case .missingAPIKey:
@@ -253,7 +258,7 @@ actor DictationCoordinator {
         }
 
         sessionContext = .dictation
-        setState(.idle)
+        await setState(.idle)
     }
 
     private func resolvedSessionContext() async -> RecordingSessionContext {
@@ -280,7 +285,7 @@ actor DictationCoordinator {
         case .dictation:
             return transcript
         case .editCommand(let selectedText):
-            setState(.editing)
+            await setState(.editing)
             let editStartedAt = ContinuousClock.now
             do {
                 logger.info("Edit mode: sending edit request selectedChars=\(selectedText.count, privacy: .public) instructionChars=\(transcript.count, privacy: .public)")
@@ -296,7 +301,7 @@ actor DictationCoordinator {
         }
     }
 
-    private func insertOrFallback(_ text: String) {
+    private func insertOrFallback(_ text: String) async {
         do {
             try textInserter.insert(text)
         } catch {
@@ -307,13 +312,13 @@ actor DictationCoordinator {
                 title: "Whisper Anywhere",
                 body: "Could not insert into the active field. Transcript copied to clipboard."
             )
-            eventDidOccur(.clipboardFallbackNotice(fallbackMessage))
+            await eventDidOccur(.clipboardFallbackNotice(fallbackMessage))
         }
     }
 
-    private func setState(_ newState: DictationState) {
+    private func setState(_ newState: DictationState) async {
         state = newState
-        stateDidChange(newState)
+        await stateDidChange(newState)
     }
 
     private func durationMilliseconds(since start: ContinuousClock.Instant) -> Double {

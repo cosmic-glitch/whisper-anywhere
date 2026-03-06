@@ -6,6 +6,7 @@ final class DictationCoordinatorTests: XCTestCase {
     func testHoldAndReleaseTranscribesAndInserts() async {
         let audio = MockAudioCapture()
         let transcriber = MockTranscriber(transcript: "hello world")
+        let transcriptionLogStore = MockTranscriptionLogStore()
         let inserter = MockTextInserter()
         let clipboard = MockClipboardService()
         let permissions = MockPermissionService(
@@ -16,6 +17,7 @@ final class DictationCoordinatorTests: XCTestCase {
         let coordinator = DictationCoordinator(
             audioCapture: audio,
             transcriptionClient: transcriber,
+            transcriptionLogStore: transcriptionLogStore,
             textInserter: inserter,
             clipboard: clipboard,
             permissionService: permissions,
@@ -34,6 +36,10 @@ final class DictationCoordinatorTests: XCTestCase {
         XCTAssertEqual(transcriber.callCount, 1)
         XCTAssertEqual(inserter.insertedTexts, ["hello world"])
         XCTAssertEqual(clipboard.copiedTexts.count, 0)
+        XCTAssertEqual(transcriptionLogStore.successEntries.count, 1)
+        XCTAssertEqual(transcriptionLogStore.successEntries.first?.transcript, "hello world")
+        XCTAssertGreaterThanOrEqual(transcriptionLogStore.successEntries.first?.durationMs ?? -1, 0)
+        XCTAssertEqual(transcriptionLogStore.failureEntries.count, 0)
         let state = await coordinator.currentState()
         XCTAssertEqual(state, .idle)
     }
@@ -300,6 +306,7 @@ private final class MockAudioCapture: AudioCapturing, @unchecked Sendable {
 private final class MockTranscriber: Transcribing, @unchecked Sendable {
     let transcript: String
     var error: Error?
+    var delayNanoseconds: UInt64 = 0
     private(set) var callCount = 0
 
     init(transcript: String) {
@@ -308,6 +315,9 @@ private final class MockTranscriber: Transcribing, @unchecked Sendable {
 
     func transcribe(audioURL: URL) async throws -> String {
         callCount += 1
+        if delayNanoseconds > 0 {
+            try? await Task.sleep(nanoseconds: delayNanoseconds)
+        }
         if let error {
             throw error
         }
@@ -445,5 +455,28 @@ private final class MockStateCollector: @unchecked Sendable {
             }
             return false
         }
+    }
+}
+
+private final class MockTranscriptionLogStore: TranscriptionLogPersisting, @unchecked Sendable {
+    struct SuccessEntry: Equatable {
+        let transcript: String
+        let durationMs: Double
+    }
+
+    struct FailureEntry: Equatable {
+        let errorDescription: String
+        let durationMs: Double
+    }
+
+    private(set) var successEntries: [SuccessEntry] = []
+    private(set) var failureEntries: [FailureEntry] = []
+
+    func persistSuccess(transcript: String, durationMs: Double) {
+        successEntries.append(SuccessEntry(transcript: transcript, durationMs: durationMs))
+    }
+
+    func persistFailure(errorDescription: String, durationMs: Double) {
+        failureEntries.append(FailureEntry(errorDescription: errorDescription, durationMs: durationMs))
     }
 }
