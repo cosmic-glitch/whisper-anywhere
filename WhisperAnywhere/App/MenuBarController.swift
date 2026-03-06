@@ -502,7 +502,7 @@ final class MenuBarController: ObservableObject {
 
             while !Task.isCancelled {
                 let instantaneousLevel = resolvedInstantaneousLevel()
-                smoothedLevel = (0.4 * instantaneousLevel) + (0.6 * smoothedLevel)
+                smoothedLevel = (0.65 * instantaneousLevel) + (0.35 * smoothedLevel)
                 hudController.update(level: smoothedLevel)
                 try? await Task.sleep(nanoseconds: 40_000_000)
             }
@@ -516,14 +516,7 @@ final class MenuBarController: ObservableObject {
     }
 
     private func resolvedInstantaneousLevel() -> Float {
-        if let rawBands = audioCapture.currentEqualizerBands(), !rawBands.isEmpty {
-            let clamped = rawBands.map { min(max($0, 0), 1) }
-            let average = clamped.reduce(0, +) / Float(clamped.count)
-            let peak = clamped.max() ?? average
-            return (0.65 * peak) + (0.35 * average)
-        }
-
-        return min(max(audioCapture.currentNormalizedInputLevel() ?? 0, 0), 1)
+        min(max(audioCapture.currentNormalizedInputLevel() ?? 0, 0), 1)
     }
 
     private func isRecordingState(_ state: DictationState) -> Bool {

@@ -10,11 +10,9 @@ enum RecordingHUDMode: Equatable {
 
 @MainActor
 final class RecordingHUDModel: ObservableObject {
-    static let waveformSampleCount = 12
-    static let waveformFloor: Float = 0.04
+    static let levelFloor: Float = 0.04
 
-    @Published var bands: [Float] = Array(repeating: waveformFloor, count: waveformSampleCount)
-    @Published var level: Float = waveformFloor
+    @Published var level: Float = levelFloor
     @Published var mode: RecordingHUDMode = .recording
 }
 
@@ -92,25 +90,29 @@ struct RecordingHUDView: View {
                         .shadow(color: .white.opacity(0.25), radius: 1.2)
                 }
             }
-            .frame(width: 35, alignment: .leading)
-            .frame(height: 16)
+            .frame(width: 39, alignment: .leading)
+            .frame(height: 18)
             .animation(.easeOut(duration: 0.08), value: model.level)
         }
     }
 
     private func dotScale(for index: Int) -> CGFloat {
         let clamped = CGFloat(min(max(model.level, 0), 1))
-        let eased = pow(clamped, 0.9)
-        let baseScale: CGFloat = 0.42
-        let dynamicRange: CGFloat = 0.56
-        let multipliers: [CGFloat] = [0.82, 1.12, 0.94]
-        return baseScale + (dynamicRange * eased * multipliers[index])
+        let energized = pow(clamped, 0.58)
+        let thresholds: [CGFloat] = [0.0, 0.08, 0.16]
+        let staged = max(0, energized - thresholds[index]) / (1 - thresholds[index])
+        let baseScale: CGFloat = 0.3
+        let dynamicRange: CGFloat = 0.72
+        let multipliers: [CGFloat] = [0.82, 1.1, 0.92]
+        return baseScale + (dynamicRange * staged * multipliers[index])
     }
 
     private func dotOpacity(for index: Int) -> Double {
         let clamped = Double(min(max(model.level, 0), 1))
-        let base: [Double] = [0.58, 0.66, 0.62]
-        let dynamic = 0.26 * clamped
+        let thresholds: [Double] = [0.0, 0.06, 0.14]
+        let staged = max(0, clamped - thresholds[index]) / (1 - thresholds[index])
+        let base: [Double] = [0.38, 0.46, 0.42]
+        let dynamic = 0.48 * pow(staged, 0.72)
         return min(0.98, base[index] + dynamic)
     }
 }

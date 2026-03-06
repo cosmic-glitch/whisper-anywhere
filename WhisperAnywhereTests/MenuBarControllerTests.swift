@@ -4,8 +4,18 @@ import XCTest
 
 @MainActor
 final class MenuBarControllerTests: XCTestCase {
+    func testRecordingMeterUsesInputLevel() async {
+        let mocks = makeMocks(audioLevel: 0.72)
+        let controller = makeController(mocks: mocks)
+
+        controller.applyStateUpdate(.recording(Date(), .dictation))
+        try? await Task.sleep(nanoseconds: 120_000_000)
+
+        XCTAssertGreaterThan(mocks.hud.lastLevel ?? 0, 0.35)
+    }
+
     func testRecordingStartPlaysChimeAndShowsHUD() async {
-        let mocks = makeMocks(audioLevel: 0.52, bands: [0.12, 0.28, 0.74, 0.33, 0.14])
+        let mocks = makeMocks(audioLevel: 0.52)
         let controller = makeController(mocks: mocks)
 
         controller.applyStateUpdate(.recording(Date(), .dictation))
@@ -14,12 +24,11 @@ final class MenuBarControllerTests: XCTestCase {
         XCTAssertEqual(mocks.chime.playCount, 1)
         XCTAssertEqual(mocks.hud.showCount, 1)
         XCTAssertGreaterThan(mocks.hud.updateCount, 0)
-        XCTAssertFalse(mocks.hud.didReceiveBandUpdate)
         XCTAssertEqual(mocks.hud.lastMode, .recording)
     }
 
     func testNonRecordingStateDoesNotPlayChimeOrShowHUD() {
-        let mocks = makeMocks(audioLevel: 0.15, bands: nil)
+        let mocks = makeMocks(audioLevel: 0.15)
         let controller = makeController(mocks: mocks)
 
         controller.applyStateUpdate(.error("failed"))
@@ -29,7 +38,7 @@ final class MenuBarControllerTests: XCTestCase {
     }
 
     func testRecordingExitHidesHUDAndStopsMeterUpdates() async {
-        let mocks = makeMocks(audioLevel: 0.9, bands: [0.18, 0.42, 0.88, 0.4, 0.22])
+        let mocks = makeMocks(audioLevel: 0.9)
         let controller = makeController(mocks: mocks)
 
         controller.applyStateUpdate(.recording(Date(), .dictation))
@@ -49,7 +58,7 @@ final class MenuBarControllerTests: XCTestCase {
     }
 
     func testEditRecordingStartUsesEditHUDMode() async {
-        let mocks = makeMocks(audioLevel: 0.44, bands: [0.17, 0.31, 0.6, 0.28, 0.11])
+        let mocks = makeMocks(audioLevel: 0.44)
         let controller = makeController(mocks: mocks)
 
         controller.applyStateUpdate(.recording(Date(), .editCommand))
@@ -61,7 +70,7 @@ final class MenuBarControllerTests: XCTestCase {
     }
 
     func testProcessingTransitionFromTranscribingToEditingUpdatesHUDMode() {
-        let mocks = makeMocks(audioLevel: 0.2, bands: nil)
+        let mocks = makeMocks(audioLevel: 0.2)
         let controller = makeController(mocks: mocks)
 
         controller.applyStateUpdate(.transcribing)
@@ -74,7 +83,7 @@ final class MenuBarControllerTests: XCTestCase {
     }
 
     func testReadyWhenAPIKeyConfiguredAndPermissionsGranted() {
-        let mocks = makeMocks(audioLevel: 0.2, bands: nil)
+        let mocks = makeMocks(audioLevel: 0.2)
         let controller = makeController(
             mocks: mocks,
             config: AppConfig(openAIKey: "sk-test", model: "gpt-4o-mini-transcribe", language: "en")
@@ -85,7 +94,7 @@ final class MenuBarControllerTests: XCTestCase {
     }
 
     func testNotReadyWhenAPIKeyMissing() {
-        let mocks = makeMocks(audioLevel: 0.2, bands: nil)
+        let mocks = makeMocks(audioLevel: 0.2)
         let controller = makeController(
             mocks: mocks,
             config: AppConfig(openAIKey: "", model: "gpt-4o-mini-transcribe", language: "en")
@@ -95,7 +104,7 @@ final class MenuBarControllerTests: XCTestCase {
     }
 
     func testSaveAPIKeyUpdatesReadiness() {
-        let mocks = makeMocks(audioLevel: 0.2, bands: nil)
+        let mocks = makeMocks(audioLevel: 0.2)
         let apiKeyStore = MenuMockAPIKeyStore(initialValue: "")
         let controller = makeController(
             mocks: mocks,
@@ -114,7 +123,7 @@ final class MenuBarControllerTests: XCTestCase {
     }
 
     func testDismissConfigurationCallsPresenterDismiss() {
-        let mocks = makeMocks(audioLevel: 0.2, bands: nil)
+        let mocks = makeMocks(audioLevel: 0.2)
         let presenter = MenuMockConfigurationPresenter()
         let controller = makeController(
             mocks: mocks,
@@ -129,7 +138,7 @@ final class MenuBarControllerTests: XCTestCase {
         let permissionService = MenuMockPermissionService(
             snapshot: PermissionSnapshot(microphone: .notDetermined, accessibility: .granted, inputMonitoring: .granted)
         )
-        let mocks = makeMocks(audioLevel: 0.2, bands: nil, permissionService: permissionService)
+        let mocks = makeMocks(audioLevel: 0.2, permissionService: permissionService)
         let defaults = makeIsolatedDefaults()
         let promptKey = "MenuBarControllerTests.DidAttemptInitialMicrophonePrompt"
         let controller = makeController(
@@ -150,7 +159,7 @@ final class MenuBarControllerTests: XCTestCase {
         let permissionService = MenuMockPermissionService(
             snapshot: PermissionSnapshot(microphone: .granted, accessibility: .granted, inputMonitoring: .granted)
         )
-        let mocks = makeMocks(audioLevel: 0.2, bands: nil, permissionService: permissionService)
+        let mocks = makeMocks(audioLevel: 0.2, permissionService: permissionService)
         let defaults = makeIsolatedDefaults()
         let promptKey = "MenuBarControllerTests.DidAttemptInitialMicrophonePrompt"
         let controller = makeController(
@@ -169,7 +178,7 @@ final class MenuBarControllerTests: XCTestCase {
         let permissionService = MenuMockPermissionService(
             snapshot: PermissionSnapshot(microphone: .denied, accessibility: .granted, inputMonitoring: .granted)
         )
-        let mocks = makeMocks(audioLevel: 0.2, bands: nil, permissionService: permissionService)
+        let mocks = makeMocks(audioLevel: 0.2, permissionService: permissionService)
         let defaults = makeIsolatedDefaults()
         let promptKey = "MenuBarControllerTests.DidAttemptInitialMicrophonePrompt"
         let controller = makeController(
@@ -188,7 +197,7 @@ final class MenuBarControllerTests: XCTestCase {
         let permissionService = MenuMockPermissionService(
             snapshot: PermissionSnapshot(microphone: .notDetermined, accessibility: .granted, inputMonitoring: .granted)
         )
-        let mocks = makeMocks(audioLevel: 0.2, bands: nil, permissionService: permissionService)
+        let mocks = makeMocks(audioLevel: 0.2, permissionService: permissionService)
         let defaults = makeIsolatedDefaults()
         let promptKey = "MenuBarControllerTests.DidAttemptInitialMicrophonePrompt"
         defaults.set(true, forKey: promptKey)
@@ -209,7 +218,7 @@ final class MenuBarControllerTests: XCTestCase {
             snapshot: PermissionSnapshot(microphone: .notDetermined, accessibility: .granted, inputMonitoring: .granted)
         )
         permissionService.microphoneRequestResult = false
-        let mocks = makeMocks(audioLevel: 0.2, bands: nil, permissionService: permissionService)
+        let mocks = makeMocks(audioLevel: 0.2, permissionService: permissionService)
         let defaults = makeIsolatedDefaults()
         let promptKey = "MenuBarControllerTests.DidAttemptInitialMicrophonePrompt"
         let controller = makeController(
@@ -231,7 +240,7 @@ final class MenuBarControllerTests: XCTestCase {
             snapshot: PermissionSnapshot(microphone: .notDetermined, accessibility: .granted, inputMonitoring: .granted)
         )
         permissionService.microphoneRequestDelayNanoseconds = 150_000_000
-        let mocks = makeMocks(audioLevel: 0.2, bands: nil, permissionService: permissionService)
+        let mocks = makeMocks(audioLevel: 0.2, permissionService: permissionService)
         let defaults = makeIsolatedDefaults()
         let promptKey = "MenuBarControllerTests.DidAttemptInitialMicrophonePrompt"
         let controller = makeController(
@@ -276,14 +285,13 @@ final class MenuBarControllerTests: XCTestCase {
 
     private func makeMocks(
         audioLevel: Float,
-        bands: [Float]?,
         permissionService: MenuMockPermissionService = MenuMockPermissionService()
     ) -> ControllerMocks {
         ControllerMocks(
             permissionService: permissionService,
             notifier: MenuMockNotifier(),
             fnMonitor: MenuMockFnMonitor(),
-            audioCapture: MenuMockAudioCapture(level: audioLevel, bands: bands),
+            audioCapture: MenuMockAudioCapture(level: audioLevel),
             chime: MenuMockChimeService(),
             hud: MenuMockHUDController()
         )
@@ -373,11 +381,9 @@ private final class MenuMockFnMonitor: FnKeyMonitoring {
 private final class MenuMockAudioCapture: AudioCapturing, @unchecked Sendable {
     private let outputURL: URL
     private let level: Float
-    private let bands: [Float]?
 
-    init(level: Float, bands: [Float]?) {
+    init(level: Float) {
         self.level = level
-        self.bands = bands
         self.outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("menu-audio-\(UUID().uuidString)")
             .appendingPathExtension("m4a")
@@ -387,7 +393,6 @@ private final class MenuMockAudioCapture: AudioCapturing, @unchecked Sendable {
     func start() throws {}
     func stop() throws -> URL { outputURL }
     func currentNormalizedInputLevel() -> Float? { level }
-    func currentEqualizerBands() -> [Float]? { bands }
 }
 
 private final class MenuMockTextInserter: TextInserting, @unchecked Sendable {
@@ -447,8 +452,8 @@ private final class MenuMockHUDController: RecordingHUDControlling {
     private(set) var showCount = 0
     private(set) var hideCount = 0
     private(set) var updateCount = 0
-    private(set) var didReceiveBandUpdate = false
     private(set) var lastMode: RecordingHUDMode?
+    private(set) var lastLevel: Float?
 
     func show() {
         showCount += 1
@@ -464,10 +469,6 @@ private final class MenuMockHUDController: RecordingHUDControlling {
 
     func update(level: Float) {
         updateCount += 1
-    }
-
-    func update(bands: [Float]) {
-        updateCount += 1
-        didReceiveBandUpdate = true
+        lastLevel = level
     }
 }

@@ -7,7 +7,6 @@ protocol RecordingHUDControlling: AnyObject {
     func hide()
     func setMode(_ mode: RecordingHUDMode)
     func update(level: Float)
-    func update(bands: [Float])
 }
 
 @MainActor
@@ -73,28 +72,6 @@ final class RecordingHUDWindowController: RecordingHUDControlling {
     func update(level: Float) {
         let clamped = min(max(level, 0), 1)
         model.level = clamped
-        model.bands = Array(repeating: clamped, count: RecordingHUDModel.waveformSampleCount)
-    }
-
-    func update(bands: [Float]) {
-        guard !bands.isEmpty else {
-            return
-        }
-
-        let normalizedBands = bands.map { min(max($0, 0), 1) }
-        if bands.count >= RecordingHUDModel.waveformSampleCount {
-            model.bands = Array(normalizedBands.suffix(RecordingHUDModel.waveformSampleCount))
-        } else {
-            let padded = normalizedBands + Array(
-                repeating: RecordingHUDModel.waveformFloor,
-                count: RecordingHUDModel.waveformSampleCount - bands.count
-            )
-            model.bands = padded
-        }
-
-        let average = normalizedBands.reduce(0, +) / Float(normalizedBands.count)
-        let peak = normalizedBands.max() ?? average
-        model.level = (0.7 * peak) + (0.3 * average)
     }
 
     private func resizePanel(for mode: RecordingHUDMode) {

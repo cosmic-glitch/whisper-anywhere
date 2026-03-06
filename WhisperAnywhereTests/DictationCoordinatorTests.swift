@@ -297,10 +297,6 @@ private final class MockAudioCapture: AudioCapturing, @unchecked Sendable {
     func currentNormalizedInputLevel() -> Float? {
         nil
     }
-
-    func currentEqualizerBands() -> [Float]? {
-        nil
-    }
 }
 
 private final class MockTranscriber: Transcribing, @unchecked Sendable {
