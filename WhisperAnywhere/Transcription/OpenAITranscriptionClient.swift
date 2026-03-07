@@ -79,6 +79,7 @@ struct OpenAITranscriptionClient: Transcribing {
         let endpoint = URL(string: "https://api.openai.com/v1/audio/transcriptions")!
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
+        request.timeoutInterval = 30
         request.setValue("Bearer \(config.openAIKey)", forHTTPHeaderField: "Authorization")
 
         let boundary = "Boundary-\(UUID().uuidString)"
