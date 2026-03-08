@@ -92,20 +92,33 @@ Bootstrap SQL is provided at [`website/supabase-schema.sql`](website/supabase-sc
 swift test
 ```
 
-## Full Release Pipeline (Required)
+## Validation and Release
 
-For any app/runtime code change, always run:
+The release workflow uses three commands:
 
 ```bash
-./scripts/full_release.sh
+./scripts/build-local
+./scripts/build-prod
+./scripts/prod-deploy
 ```
 
-This command:
+`./scripts/build-local` runs `swift test` and builds a local DMG at `dist/Whisper-Anywhere-test.dmg`.
 
-- runs tests
-- rebuilds `dist/Whisper-Anywhere-unsigned.dmg`
-- updates `website/downloads/Whisper-Anywhere-unsigned.dmg`
-- verifies both DMG files are byte-identical (SHA-256 match)
+To build a signed production DMG, run:
+
+```bash
+./scripts/build-prod
+```
+
+This creates a signed + notarized versioned DMG in `dist/` and copies that versioned DMG into `website/downloads/`.
+
+To publish the current release to Vercel, run:
+
+```bash
+./scripts/prod-deploy
+```
+
+This updates the website download links to the selected versioned DMG, deploys the website, and verifies the live site serves that version.
 
 Local enforcement:
 
@@ -113,4 +126,4 @@ Local enforcement:
 ./scripts/setup_git_hooks.sh
 ```
 
-This installs a `pre-push` guard that blocks pushes if app code changed without both DMGs being updated and matching.
+This configures the repository hook path. The `pre-push` hook is intentionally a no-op; this project does not run builds automatically from git hooks.

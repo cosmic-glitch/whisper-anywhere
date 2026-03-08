@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+WEBSITE_DIR="$ROOT_DIR/website"
+WEBSITE_DOWNLOADS_DIR="$WEBSITE_DIR/downloads"
+PRODUCTION_URL="${PRODUCTION_URL:-https://whisperanywhere.app}"
+VERSION="${VERSION:-}"
+VERSION_SERIES="${VERSION_SERIES:-1.3}"
+
+log() {
+  echo "==> $*"
+}
+
+die() {
+  echo "Error: $*" >&2
+  exit 1
+}
+
+require_cmd() {
+  command -v "$1" >/dev/null 2>&1 || die "Missing required command: $1"
+}
+
+resolve_latest_version() {
+  find "$WEBSITE_DOWNLOADS_DIR" -maxdepth 1 -type f -name 'Whisper-Anywhere-*.dmg' \
+    | sed -E 's#^.*/Whisper-Anywhere-([0-9]+\.[0-9]+\.[0-9]+)\.dmg$#\1#' \
+    | awk -F. -v series="$VERSION_SERIES" '$1 "." $2 == series { print $0 }' \
+    | sort -t. -k1,1n -k2,2n -k3,3n \
+    | tail -n 1
+}
+
+usage() {
+  cat <<'EOF'
+Deploy the production website and release DMG to Vercel.
+
+Usage:
+  ./scripts/prod-deploy [options]
+
+Options:
+  --version <string>       Release version to publish. Defaults to the latest DMG in website/downloads.
+  --version-series <x.y>   Version series used when auto-selecting a release (default: 1.3).
+  --production-url <url>   Public site URL to verify after deploy (default: https://whisperanywhere.app).
+  -h, --help               Show this help text.
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --version)
+      shift
+      VERSION="${1:-}"
+      ;;
+    --version-series)
+      shift
+      VERSION_SERIES="${1:-}"
+      ;;
+    --production-url)
+      shift
+      PRODUCTION_URL="${1:-}"
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      die "Unknown argument: $1"
+      ;;
+  esac
+  shift
+done
+
+require_cmd perl
+require_cmd rg
+require_cmd curl
+require_cmd vercel
+
+if [[ -z "$VERSION" ]]; then
+  VERSION="$(resolve_latest_version)"
+fi
+
+[[ -n "$VERSION" ]] || die "Could not determine a release version to deploy."
+
+RELEASE_DMG="$WEBSITE_DOWNLOADS_DIR/Whisper-Anywhere-${VERSION}.dmg"
+[[ -f "$RELEASE_DMG" ]] || die "Release artifact not found: $RELEASE_DMG"
+
+if [[ -e "$WEBSITE_DOWNLOADS_DIR/Whisper-Anywhere-unsigned.dmg" ]]; then
+  die "Remove website/downloads/Whisper-Anywhere-unsigned.dmg before deploying."
+fi
+
+log "Updating website download links to Whisper-Anywhere-${VERSION}.dmg"
+shopt -s nullglob
+updated_files=0
+for file in "$WEBSITE_DIR"/*.html; do
+  if rg -q 'Whisper-Anywhere-[0-9]+\.[0-9]+\.[0-9]+\.dmg' "$file"; then
+    perl -0pi -e 's#\./downloads/Whisper-Anywhere-\d+\.\d+\.\d+\.dmg#./downloads/Whisper-Anywhere-'"$VERSION"'.dmg#g' "$file"
+    updated_files=1
+  fi
+done
+shopt -u nullglob
+
+[[ "$updated_files" -eq 1 ]] || die "No website HTML files contained a versioned DMG link."
+
+log "Deploying website to Vercel"
+cd "$ROOT_DIR"
+vercel deploy --prod --yes --archive=tgz
+
+log "Verifying live homepage references Whisper-Anywhere-${VERSION}.dmg"
+curl -L --silent "$PRODUCTION_URL" | rg -q "Whisper-Anywhere-${VERSION}\\.dmg" \
+  || die "Live homepage does not reference Whisper-Anywhere-${VERSION}.dmg"
+
+log "Verifying live DMG URL"
+http_code="$(curl -L --silent -o /dev/null -w '%{http_code}' "${PRODUCTION_URL}/downloads/Whisper-Anywhere-${VERSION}.dmg")"
+[[ "$http_code" == "200" ]] || die "Live DMG URL returned HTTP ${http_code}"
+
+log "Production deploy complete for Whisper-Anywhere-${VERSION}.dmg"
