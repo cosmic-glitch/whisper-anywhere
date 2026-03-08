@@ -10,50 +10,34 @@ BUNDLE_ID="ai.whisperanywhere.app"
 MIN_MACOS_VERSION="14.0"
 ICON_SOURCE="$ROOT_DIR/WhisperAnywhere/Resources/AppIcon.icns"
 BUILD_DIR="$ROOT_DIR/.build/release"
-# Output directory for build artifacts (gitignored — do not commit dist/).
 DIST_DIR="$ROOT_DIR/dist"
 VOLUME_NAME="Whisper Anywhere"
 ENTITLEMENTS_PATH="$ROOT_DIR/scripts/whisperanywhere.entitlements"
+WEBSITE_DOWNLOADS_DIR="$ROOT_DIR/website/downloads"
 
 IDENTITY="${DEVELOPER_IDENTITY:-Developer ID Application: Anurag Ved (94DFHZ6ZTZ)}"
 NOTARY_PROFILE="${NOTARY_PROFILE:-whisperanywhere-notary}"
 VERSION="${VERSION:-}"
 BUILD_NUMBER="${BUILD_NUMBER:-}"
-SKIP_NOTARIZE=false
+VERSION_SERIES="${VERSION_SERIES:-1.3}"
 KEEP_STAGING=false
 
 usage() {
   cat <<'EOF'
-Create a signed + notarized DMG for Whisper Anywhere.
+Build a signed + notarized production DMG for Whisper Anywhere.
 
 Usage:
-  ./scripts/release_dmg.sh --identity "Developer ID Application: Name (TEAMID)" [options]
-
-Required:
-  --identity <name>        Developer ID Application certificate name.
+  ./scripts/build-prod [options]
 
 Options:
-  --notary-profile <name>  notarytool keychain profile (required unless --skip-notarize).
-  --version <string>       CFBundleShortVersionString and DMG version label.
-  --build-number <string>  CFBundleVersion.
-  --output-dir <path>      Output directory for app bundle + dmg (default: ./dist).
-  --skip-notarize          Build and sign only; skip notarization and stapling.
-  --keep-staging           Keep temporary dmg staging directory.
+  --identity <name>        Developer ID Application certificate name.
+  --notary-profile <name>  notarytool keychain profile.
+  --version <string>       Release version. Defaults to the next patch in VERSION_SERIES.
+  --build-number <string>  CFBundleVersion. Defaults to the current timestamp.
+  --version-series <x.y>   Version series used when auto-incrementing (default: 1.3).
+  --output-dir <path>      Output directory for app bundle + artifacts (default: ./dist).
+  --keep-staging           Keep the temporary DMG staging directory.
   -h, --help               Show this help text.
-
-Environment variable equivalents:
-  DEVELOPER_IDENTITY, NOTARY_PROFILE, VERSION, BUILD_NUMBER
-
-Examples:
-  ./scripts/release_dmg.sh \
-    --identity "Developer ID Application: Your Name (ABCDE12345)" \
-    --notary-profile whisperanywhere-notary \
-    --version 1.2.3 \
-    --build-number 7
-
-  ./scripts/release_dmg.sh \
-    --identity "Developer ID Application: Your Name (ABCDE12345)" \
-    --version 1.2.3 --build-number 7 --skip-notarize
 EOF
 }
 
@@ -68,6 +52,25 @@ die() {
 
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || die "Missing required command: $1"
+}
+
+resolve_next_version() {
+  local latest_version
+  latest_version="$(
+    find "$WEBSITE_DOWNLOADS_DIR" -maxdepth 1 -type f -name 'Whisper-Anywhere-*.dmg' \
+      | sed -E 's#^.*/Whisper-Anywhere-([0-9]+\.[0-9]+\.[0-9]+)\.dmg$#\1#' \
+      | awk -F. -v series="$VERSION_SERIES" '$1 "." $2 == series { print $0 }' \
+      | sort -t. -k1,1n -k2,2n -k3,3n \
+      | tail -n 1
+  )"
+
+  if [[ -z "$latest_version" ]]; then
+    echo "${VERSION_SERIES}.0"
+    return
+  fi
+
+  IFS=. read -r major minor patch <<< "$latest_version"
+  echo "${major}.${minor}.$((patch + 1))"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -88,12 +91,13 @@ while [[ $# -gt 0 ]]; do
       shift
       BUILD_NUMBER="${1:-}"
       ;;
+    --version-series)
+      shift
+      VERSION_SERIES="${1:-}"
+      ;;
     --output-dir)
       shift
       DIST_DIR="${1:-}"
-      ;;
-    --skip-notarize)
-      SKIP_NOTARIZE=true
       ;;
     --keep-staging)
       KEEP_STAGING=true
@@ -110,14 +114,10 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -n "$IDENTITY" ]] || die "--identity is required (or set DEVELOPER_IDENTITY)."
-
-if [[ "$SKIP_NOTARIZE" == false ]]; then
-  [[ -n "$NOTARY_PROFILE" ]] || die "--notary-profile is required unless --skip-notarize is set."
-fi
+[[ -n "$NOTARY_PROFILE" ]] || die "--notary-profile is required (or set NOTARY_PROFILE)."
 
 if [[ -z "$VERSION" ]]; then
-  VERSION="$(git -C "$ROOT_DIR" describe --tags --always --dirty 2>/dev/null | sed 's/^v//')"
-  [[ -n "$VERSION" ]] || VERSION="1.0.0"
+  VERSION="$(resolve_next_version)"
 fi
 
 if [[ -z "$BUILD_NUMBER" ]]; then
@@ -131,6 +131,7 @@ APP_ZIP_PATH="$DIST_DIR/${APP_PRODUCT_NAME}-${VERSION}.zip"
 EXECUTABLE_PATH="$APP_BUNDLE_PATH/Contents/MacOS/$EXECUTABLE_NAME"
 INFO_PLIST_PATH="$APP_BUNDLE_PATH/Contents/Info.plist"
 RESOURCE_BUNDLE_PATH="$BUILD_DIR/${EXECUTABLE_NAME}_${EXECUTABLE_NAME}.bundle"
+WEBSITE_DMG_PATH="$WEBSITE_DOWNLOADS_DIR/${DMG_BASENAME}-${VERSION}.dmg"
 
 cleanup() {
   if [[ "$KEEP_STAGING" == false ]]; then
@@ -144,12 +145,12 @@ require_cmd codesign
 require_cmd hdiutil
 require_cmd xcrun
 
-if [[ "$SKIP_NOTARIZE" == false ]]; then
-  require_cmd xcrun
-fi
-
 [[ -f "$ICON_SOURCE" ]] || die "Icon file not found: $ICON_SOURCE"
 [[ -f "$ENTITLEMENTS_PATH" ]] || die "Entitlements file not found: $ENTITLEMENTS_PATH"
+
+if [[ -e "$WEBSITE_DMG_PATH" ]]; then
+  die "Refusing to overwrite existing website release artifact: $WEBSITE_DMG_PATH"
+fi
 
 log "Building release binary"
 cd "$ROOT_DIR"
@@ -203,16 +204,14 @@ codesign --force --sign "$IDENTITY" --options runtime --timestamp --entitlements
 codesign --force --sign "$IDENTITY" --options runtime --timestamp --entitlements "$ENTITLEMENTS_PATH" "$APP_BUNDLE_PATH"
 codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE_PATH"
 
-if [[ "$SKIP_NOTARIZE" == false ]]; then
-  log "Creating zip for app notarization submission"
-  ditto -c -k --sequesterRsrc --keepParent "$APP_BUNDLE_PATH" "$APP_ZIP_PATH"
+log "Creating zip for app notarization submission"
+ditto -c -k --sequesterRsrc --keepParent "$APP_BUNDLE_PATH" "$APP_ZIP_PATH"
 
-  log "Submitting app zip for notarization"
-  xcrun notarytool submit "$APP_ZIP_PATH" --keychain-profile "$NOTARY_PROFILE" --wait
+log "Submitting app zip for notarization"
+xcrun notarytool submit "$APP_ZIP_PATH" --keychain-profile "$NOTARY_PROFILE" --wait
 
-  log "Stapling app bundle"
-  xcrun stapler staple "$APP_BUNDLE_PATH"
-fi
+log "Stapling app bundle"
+xcrun stapler staple "$APP_BUNDLE_PATH"
 
 log "Creating DMG staging content"
 mkdir -p "$DMG_STAGING_PATH"
@@ -231,16 +230,20 @@ log "Signing DMG"
 codesign --force --sign "$IDENTITY" --timestamp "$DMG_PATH"
 codesign --verify --verbose=2 "$DMG_PATH"
 
-if [[ "$SKIP_NOTARIZE" == false ]]; then
-  log "Submitting DMG for notarization"
-  xcrun notarytool submit "$DMG_PATH" --keychain-profile "$NOTARY_PROFILE" --wait
+log "Submitting DMG for notarization"
+xcrun notarytool submit "$DMG_PATH" --keychain-profile "$NOTARY_PROFILE" --wait
 
-  log "Stapling DMG"
-  xcrun stapler staple "$DMG_PATH"
+log "Stapling DMG"
+xcrun stapler staple "$DMG_PATH"
 
-  log "Validating Gatekeeper assessment"
-  spctl -a -t open --context context:primary-signature -vv "$DMG_PATH"
-fi
+log "Validating Gatekeeper assessment"
+spctl -a -t open --context context:primary-signature -vv "$DMG_PATH"
 
-log "Release artifact ready:"
+log "Copying signed release DMG to website downloads"
+mkdir -p "$WEBSITE_DOWNLOADS_DIR"
+cp "$DMG_PATH" "$WEBSITE_DMG_PATH"
+
+log "Production release DMG ready:"
 echo "$DMG_PATH"
+log "Website artifact:"
+echo "$WEBSITE_DMG_PATH"
