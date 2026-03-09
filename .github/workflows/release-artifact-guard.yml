@@ -20,8 +20,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          DIST_DMG="dist/Whisper-Anywhere-unsigned.dmg"
-          WEB_DMG="website/downloads/Whisper-Anywhere-unsigned.dmg"
+          LEGACY_UNSIGNED_DIST_DMG="dist/Whisper-Anywhere-unsigned.dmg"
+          LEGACY_UNSIGNED_WEB_DMG="website/downloads/Whisper-Anywhere-unsigned.dmg"
+          VERSIONED_WEB_DMG_REGEX='^website/downloads/Whisper-Anywhere-[0-9]+\.[0-9]+\.[0-9]+\.dmg$'
 
           if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
             BASE_SHA="${{ github.event.pull_request.base.sha }}"
@@ -38,8 +39,8 @@ jobs:
           fi
 
           RELEASE_REQUIRED=0
-          DIST_CHANGED=0
-          WEB_CHANGED=0
+          LEGACY_UNSIGNED_CHANGED=0
+          VERSIONED_WEB_DMG_CHANGED=""
 
           while IFS= read -r path; do
             [[ -z "$path" ]] && continue
@@ -50,8 +51,15 @@ jobs:
                 ;;
             esac
 
-            [[ "$path" == "$DIST_DMG" ]] && DIST_CHANGED=1
-            [[ "$path" == "$WEB_DMG" ]] && WEB_CHANGED=1
+            case "$path" in
+              "$LEGACY_UNSIGNED_DIST_DMG"|"$LEGACY_UNSIGNED_WEB_DMG")
+                LEGACY_UNSIGNED_CHANGED=1
+                ;;
+            esac
+
+            if [[ "$path" =~ $VERSIONED_WEB_DMG_REGEX ]]; then
+              VERSIONED_WEB_DMG_CHANGED+="${path}"$'\n'
+            fi
           done <<< "$CHANGED"
 
           if [[ "$RELEASE_REQUIRED" -eq 0 ]]; then
@@ -59,25 +67,29 @@ jobs:
             exit 0
           fi
 
-          if [[ "$DIST_CHANGED" -ne 1 || "$WEB_CHANGED" -ne 1 ]]; then
-            echo "App/runtime changes detected, but DMG artifacts were not both updated."
-            echo "Required files:"
-            echo "  - $DIST_DMG"
-            echo "  - $WEB_DMG"
+          if [[ "$LEGACY_UNSIGNED_CHANGED" -eq 1 ]]; then
+            echo "Legacy unsigned DMG paths are no longer supported."
+            echo "Use ./scripts/build-prod to create a versioned DMG in website/downloads."
             exit 1
           fi
 
-          DIST_BLOB="$(git rev-parse "$HEAD_SHA:$DIST_DMG" 2>/dev/null || true)"
+          VERSIONED_WEB_DMGS="$(printf '%s' "$VERSIONED_WEB_DMG_CHANGED" | sed '/^$/d' | sort -u)"
+          VERSIONED_WEB_DMG_COUNT="$(printf '%s\n' "$VERSIONED_WEB_DMGS" | sed '/^$/d' | wc -l | tr -d ' ')"
+
+          if [[ "$VERSIONED_WEB_DMG_COUNT" -ne 1 ]]; then
+            echo "App/runtime changes detected, but exactly one versioned website DMG was not updated."
+            echo "Expected one changed file matching:"
+            echo "  - website/downloads/Whisper-Anywhere-x.y.z.dmg"
+            echo "Found $VERSIONED_WEB_DMG_COUNT matching files."
+            exit 1
+          fi
+
+          WEB_DMG="$(printf '%s\n' "$VERSIONED_WEB_DMGS" | head -n 1)"
           WEB_BLOB="$(git rev-parse "$HEAD_SHA:$WEB_DMG" 2>/dev/null || true)"
 
-          if [[ -z "$DIST_BLOB" || -z "$WEB_BLOB" ]]; then
-            echo "Required DMG files missing at HEAD."
+          if [[ -z "$WEB_BLOB" ]]; then
+            echo "Required DMG file missing at HEAD: $WEB_DMG"
             exit 1
           fi
 
-          if [[ "$DIST_BLOB" != "$WEB_BLOB" ]]; then
-            echo "DMG artifacts differ; they must be byte-identical."
-            exit 1
-          fi
-
-          echo "Release artifact policy passed."
+          echo "Release artifact policy passed for $WEB_DMG."
