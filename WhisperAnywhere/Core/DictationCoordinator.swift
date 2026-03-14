@@ -64,9 +64,14 @@ actor DictationCoordinator {
     private let stateDidChange: @Sendable (DictationState) async -> Void
     private let eventDidOccur: @Sendable (DictationEvent) async -> Void
 
+    private let streamingAudioCapture: StreamingAudioCaptureService?
+    private let streamingClient: StreamingTranscribing?
+    private let transcriptDidUpdate: (@Sendable (String) async -> Void)?
+
     private var state: DictationState = .idle
     private var recordingURL: URL?
     private var sessionContext: RecordingSessionContext = .dictation
+    private var streamingEventTask: Task<Void, Never>?
 
     init(
         audioCapture: AudioCapturing,
@@ -82,7 +87,10 @@ actor DictationCoordinator {
         minimumPressDuration: TimeInterval = 0.15,
         errorDisplayDuration: UInt64 = 1_200_000_000,
         stateDidChange: @escaping @Sendable (DictationState) async -> Void,
-        eventDidOccur: @escaping @Sendable (DictationEvent) async -> Void = { _ in }
+        eventDidOccur: @escaping @Sendable (DictationEvent) async -> Void = { _ in },
+        streamingAudioCapture: StreamingAudioCaptureService? = nil,
+        streamingClient: StreamingTranscribing? = nil,
+        transcriptDidUpdate: (@Sendable (String) async -> Void)? = nil
     ) {
         self.audioCapture = audioCapture
         self.transcriptionClient = transcriptionClient
@@ -98,6 +106,9 @@ actor DictationCoordinator {
         self.errorDisplayDuration = errorDisplayDuration
         self.stateDidChange = stateDidChange
         self.eventDidOccur = eventDidOccur
+        self.streamingAudioCapture = streamingAudioCapture
+        self.streamingClient = streamingClient
+        self.transcriptDidUpdate = transcriptDidUpdate
     }
 
     func currentState() -> DictationState {
@@ -112,9 +123,31 @@ actor DictationCoordinator {
         do {
             try await ensureReadyToRecord()
             sessionContext = await resolvedSessionContext()
-            try audioCapture.start()
-            await setState(.recording(Date(), modeForSessionContext(sessionContext)))
-            logger.info("Fn pressed: started recording session mode=\(String(describing: self.modeForSessionContext(self.sessionContext)), privacy: .public)")
+
+            if let streamingAudioCapture, let streamingClient {
+                try streamingAudioCapture.start()
+                let pcmStream = streamingAudioCapture.pcmChunkStream()
+                let eventStream = streamingClient.transcribeStream(audioChunks: pcmStream)
+
+                streamingEventTask = Task { [weak self, transcriptDidUpdate] in
+                    for await event in eventStream {
+                        guard !Task.isCancelled else { break }
+                        switch event {
+                        case .partial(let text):
+                            await transcriptDidUpdate?(text)
+                        case .final_(let text):
+                            await transcriptDidUpdate?(text)
+                        }
+                    }
+                }
+
+                await setState(.recording(Date(), modeForSessionContext(sessionContext)))
+                logger.info("Fn pressed: started streaming recording session mode=\(String(describing: self.modeForSessionContext(self.sessionContext)), privacy: .public)")
+            } else {
+                try audioCapture.start()
+                await setState(.recording(Date(), modeForSessionContext(sessionContext)))
+                logger.info("Fn pressed: started recording session mode=\(String(describing: self.modeForSessionContext(self.sessionContext)), privacy: .public)")
+            }
         } catch let error as DictationError {
             sessionContext = .dictation
             logger.error("Fn pressed: failed before recording error=\(error.localizedDescription, privacy: .public)")
@@ -134,43 +167,86 @@ actor DictationCoordinator {
         let activeSession = sessionContext
 
         do {
-            let audioURL = try audioCapture.stop()
-            recordingURL = audioURL
-            logger.info("Fn released: stopped recording session=\(String(describing: self.modeForSessionContext(activeSession)), privacy: .public)")
+            if let streamingAudioCapture, let streamingClient {
+                let audioURL = try streamingAudioCapture.stop()
+                recordingURL = audioURL
+                logger.info("Fn released: stopped streaming recording session=\(String(describing: self.modeForSessionContext(activeSession)), privacy: .public)")
 
-            let pressDuration = Date().timeIntervalSince(startedAt)
-            guard pressDuration >= minimumPressDuration else {
+                streamingEventTask?.cancel()
+                streamingEventTask = nil
+
+                let pressDuration = Date().timeIntervalSince(startedAt)
+                guard pressDuration >= minimumPressDuration else {
+                    try? FileManager.default.removeItem(at: audioURL)
+                    recordingURL = nil
+                    sessionContext = .dictation
+                    await setState(.idle)
+                    return
+                }
+
+                await setState(.transcribing)
+                let transcriptionStartedAt = ContinuousClock.now
+                let transcript: String
+                do {
+                    transcript = try await streamingClient.finalize()
+                } catch {
+                    let elapsed = durationMilliseconds(since: transcriptionStartedAt)
+                    transcriptionLogStore.persistFailure(errorDescription: error.localizedDescription, durationMs: elapsed)
+                    logger.error("Streaming transcription finalize failed durationMs=\(elapsed, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
+                    throw error
+                }
+                let transcriptionElapsed = durationMilliseconds(since: transcriptionStartedAt)
+                transcriptionLogStore.persistSuccess(transcript: transcript, durationMs: transcriptionElapsed)
+                logger.info("Streaming transcription finalized durationMs=\(transcriptionElapsed, privacy: .public)")
+                logger.info("Streaming transcription complete transcriptChars=\(transcript.count, privacy: .public)")
+                let insertionText = await resolveInsertionText(transcript: transcript, session: activeSession)
+
+                await setState(.inserting)
+                await insertOrFallback(insertionText)
+
                 try? FileManager.default.removeItem(at: audioURL)
                 recordingURL = nil
                 sessionContext = .dictation
                 await setState(.idle)
-                return
+            } else {
+                let audioURL = try audioCapture.stop()
+                recordingURL = audioURL
+                logger.info("Fn released: stopped recording session=\(String(describing: self.modeForSessionContext(activeSession)), privacy: .public)")
+
+                let pressDuration = Date().timeIntervalSince(startedAt)
+                guard pressDuration >= minimumPressDuration else {
+                    try? FileManager.default.removeItem(at: audioURL)
+                    recordingURL = nil
+                    sessionContext = .dictation
+                    await setState(.idle)
+                    return
+                }
+
+                await setState(.transcribing)
+                let transcriptionStartedAt = ContinuousClock.now
+                let transcript: String
+                do {
+                    transcript = try await transcriptionClient.transcribe(audioURL: audioURL)
+                } catch {
+                    let elapsed = durationMilliseconds(since: transcriptionStartedAt)
+                    transcriptionLogStore.persistFailure(errorDescription: error.localizedDescription, durationMs: elapsed)
+                    logger.error("Transcription call failed durationMs=\(elapsed, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
+                    throw error
+                }
+                let transcriptionElapsed = durationMilliseconds(since: transcriptionStartedAt)
+                transcriptionLogStore.persistSuccess(transcript: transcript, durationMs: transcriptionElapsed)
+                logger.info("Transcription call succeeded durationMs=\(transcriptionElapsed, privacy: .public)")
+                logger.info("Transcription complete transcriptChars=\(transcript.count, privacy: .public)")
+                let insertionText = await resolveInsertionText(transcript: transcript, session: activeSession)
+
+                await setState(.inserting)
+                await insertOrFallback(insertionText)
+
+                try? FileManager.default.removeItem(at: audioURL)
+                recordingURL = nil
+                sessionContext = .dictation
+                await setState(.idle)
             }
-
-            await setState(.transcribing)
-            let transcriptionStartedAt = ContinuousClock.now
-            let transcript: String
-            do {
-                transcript = try await transcriptionClient.transcribe(audioURL: audioURL)
-            } catch {
-                let elapsed = durationMilliseconds(since: transcriptionStartedAt)
-                transcriptionLogStore.persistFailure(errorDescription: error.localizedDescription, durationMs: elapsed)
-                logger.error("Transcription call failed durationMs=\(elapsed, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
-                throw error
-            }
-            let transcriptionElapsed = durationMilliseconds(since: transcriptionStartedAt)
-            transcriptionLogStore.persistSuccess(transcript: transcript, durationMs: transcriptionElapsed)
-            logger.info("Transcription call succeeded durationMs=\(transcriptionElapsed, privacy: .public)")
-            logger.info("Transcription complete transcriptChars=\(transcript.count, privacy: .public)")
-            let insertionText = await resolveInsertionText(transcript: transcript, session: activeSession)
-
-            await setState(.inserting)
-            await insertOrFallback(insertionText)
-
-            try? FileManager.default.removeItem(at: audioURL)
-            recordingURL = nil
-            sessionContext = .dictation
-            await setState(.idle)
         } catch let error as DictationError {
             sessionContext = .dictation
             logger.error("Fn released: dictation pipeline failed error=\(error.localizedDescription, privacy: .public)")
@@ -186,7 +262,7 @@ actor DictationCoordinator {
     }
 
     private func ensureReadyToRecord() async throws {
-        guard config.hasAPIKey else {
+        guard config.hasActiveProviderKey else {
             throw DictationError.missingAPIKey
         }
 
@@ -229,6 +305,10 @@ actor DictationCoordinator {
 
         if let editError = error as? OpenAIEditError {
             return .apiFailure(editError.localizedDescription)
+        }
+
+        if let deepgramError = error as? DeepgramTranscriptionError {
+            return .apiFailure(deepgramError.localizedDescription)
         }
 
         return .apiFailure(error.localizedDescription)

@@ -5,6 +5,7 @@ protocol BackendAuthenticating: Sendable {
     func completeGoogleSignIn(oauthTokens: GoogleOAuthTokens, deviceID: String) async throws -> AuthSession
     func refreshSession(refreshToken: String) async throws -> AuthSession
     func fetchAPIKey(accessToken: String) async throws -> String
+    func fetchDeepgramKey(accessToken: String) async throws -> String
 }
 
 enum BackendAuthError: LocalizedError, Equatable {
@@ -198,6 +199,24 @@ struct BackendAuthClient: BackendAuthenticating {
     func fetchAPIKey(accessToken: String) async throws -> String {
         let data = try await performAuthorizedPost(
             path: "/api/auth/apikey",
+            accessToken: accessToken
+        )
+
+        guard let decoded = try? JSONDecoder().decode(APIKeyResponse.self, from: data) else {
+            throw BackendAuthError.decodingFailed
+        }
+
+        let key = decoded.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else {
+            throw BackendAuthError.missingAPIKey
+        }
+
+        return key
+    }
+
+    func fetchDeepgramKey(accessToken: String) async throws -> String {
+        let data = try await performAuthorizedPost(
+            path: "/api/auth/deepgram-apikey",
             accessToken: accessToken
         )
 

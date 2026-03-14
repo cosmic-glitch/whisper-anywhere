@@ -3,6 +3,7 @@ import SwiftUI
 enum RecordingHUDMode: Equatable {
     case recording
     case recordingEditCommand
+    case recordingWithTranscript(String)
     case transcribing
     case editing
     case message(String)
@@ -32,6 +33,15 @@ struct RecordingHUDView: View {
                     }
 
                     recordingIndicator
+
+                    if case .recordingWithTranscript(let text) = model.mode, !text.isEmpty {
+                        Text(text)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.7)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
             } else if model.mode == .transcribing {
                 Text("Transcribing")
@@ -68,7 +78,12 @@ struct RecordingHUDView: View {
     }
 
     private var isRecordingMode: Bool {
-        model.mode == .recording || model.mode == .recordingEditCommand
+        switch model.mode {
+        case .recording, .recordingEditCommand, .recordingWithTranscript:
+            return true
+        default:
+            return false
+        }
     }
 
     private var recordingIndicator: some View {

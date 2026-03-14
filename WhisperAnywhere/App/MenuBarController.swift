@@ -36,6 +36,12 @@ final class MenuBarController: ObservableObject {
                 controller?.applyStateUpdate(state)
             }
         }
+
+        func publishTranscriptUpdate(_ text: String) async {
+            await MainActor.run { [weak controller] in
+                controller?.hudController.setMode(.recordingWithTranscript(text))
+            }
+        }
     }
 
     private final class DictationEventSink: @unchecked Sendable {
@@ -57,6 +63,7 @@ final class MenuBarController: ObservableObject {
     @Published private(set) var isSignedIn = false
     @Published private(set) var signedInEmail: String?
     @Published private(set) var isSigningIn = false
+    @Published var selectedProvider: TranscriptionProvider
 
     private let permissionService: PermissionProviding
     private let notifier: Notifying
@@ -72,7 +79,8 @@ final class MenuBarController: ObservableObject {
     private let legacyBundleIdentifier: String
     private let stateSink: DictationStateSink
     private let eventSink: DictationEventSink
-    private let coordinator: DictationCoordinator
+    private var coordinator: DictationCoordinator
+    private var streamingAudioCapture: StreamingAudioCaptureService?
 
     let sessionStore: SessionStoring
     let inMemoryKeyProvider: InMemoryAPIKeyProvider
@@ -85,6 +93,8 @@ final class MenuBarController: ObservableObject {
     private var started = false
 
     let config: AppConfig
+
+    private static let providerDefaultsKey = "WhisperAnywhere.TranscriptionProvider"
 
     init(
         config: AppConfig? = nil,
@@ -110,8 +120,11 @@ final class MenuBarController: ObservableObject {
         hudController: RecordingHUDControlling = RecordingHUDWindowController(),
         autoStart: Bool = true
     ) {
-        let resolvedConfig = config ?? AppConfig.load(apiKeyStore: inMemoryKeyProvider)
+        let savedProviderRaw = appDefaults.string(forKey: Self.providerDefaultsKey) ?? ""
+        let savedProvider = TranscriptionProvider(rawValue: savedProviderRaw) ?? .openAI
+        let resolvedConfig = config ?? AppConfig.load(apiKeyStore: inMemoryKeyProvider, provider: savedProvider)
 
+        self.selectedProvider = savedProvider
         self.config = resolvedConfig
         self.inMemoryKeyProvider = inMemoryKeyProvider
         self.sessionStore = sessionStore
@@ -132,27 +145,56 @@ final class MenuBarController: ObservableObject {
         self.stateSink = DictationStateSink()
         self.eventSink = DictationEventSink()
         self.permissionSnapshot = permissionService.snapshot()
-        self.apiKeyConfigured = !resolvedConfig.openAIKey.isEmpty
+        self.apiKeyConfigured = resolvedConfig.hasActiveProviderKey
         let resolvedTextEditor = textEditor ?? OpenAIEditClient(config: resolvedConfig)
 
-        self.coordinator = DictationCoordinator(
-            audioCapture: audioCapture,
-            transcriptionClient: OpenAITranscriptionClient(config: resolvedConfig),
-            transcriptionLogStore: FileTranscriptionLogStore(),
-            textEditor: resolvedTextEditor,
-            textInserter: textInserter,
-            clipboard: clipboard,
-            selectionDetector: selectionDetector,
-            permissionService: permissionService,
-            notifier: notifier,
-            config: resolvedConfig,
-            stateDidChange: { [weak stateSink] newState in
-                await stateSink?.publish(newState)
-            },
-            eventDidOccur: { [weak eventSink] event in
-                await eventSink?.publish(event)
-            }
-        )
+        if savedProvider == .deepgram {
+            let streamAudio = StreamingAudioCaptureService()
+            self.streamingAudioCapture = streamAudio
+            self.coordinator = DictationCoordinator(
+                audioCapture: streamAudio,
+                transcriptionClient: OpenAITranscriptionClient(config: resolvedConfig),
+                transcriptionLogStore: FileTranscriptionLogStore(),
+                textEditor: resolvedTextEditor,
+                textInserter: textInserter,
+                clipboard: clipboard,
+                selectionDetector: selectionDetector,
+                permissionService: permissionService,
+                notifier: notifier,
+                config: resolvedConfig,
+                stateDidChange: { [weak stateSink] newState in
+                    await stateSink?.publish(newState)
+                },
+                eventDidOccur: { [weak eventSink] event in
+                    await eventSink?.publish(event)
+                },
+                streamingAudioCapture: streamAudio,
+                streamingClient: DeepgramStreamingClient(keyProvider: DeepgramKeyStore.shared),
+                transcriptDidUpdate: { [weak stateSink] text in
+                    await stateSink?.publishTranscriptUpdate(text)
+                }
+            )
+        } else {
+            self.streamingAudioCapture = nil
+            self.coordinator = DictationCoordinator(
+                audioCapture: audioCapture,
+                transcriptionClient: OpenAITranscriptionClient(config: resolvedConfig),
+                transcriptionLogStore: FileTranscriptionLogStore(),
+                textEditor: resolvedTextEditor,
+                textInserter: textInserter,
+                clipboard: clipboard,
+                selectionDetector: selectionDetector,
+                permissionService: permissionService,
+                notifier: notifier,
+                config: resolvedConfig,
+                stateDidChange: { [weak stateSink] newState in
+                    await stateSink?.publish(newState)
+                },
+                eventDidOccur: { [weak eventSink] event in
+                    await eventSink?.publish(event)
+                }
+            )
+        }
 
         stateSink.controller = self
         eventSink.controller = self
@@ -303,6 +345,10 @@ final class MenuBarController: ObservableObject {
                 let apiKey = try await backendAuthClient.fetchAPIKey(accessToken: session.accessToken)
                 inMemoryKeyProvider.setAPIKey(apiKey)
 
+                if let deepgramKey = try? await backendAuthClient.fetchDeepgramKey(accessToken: session.accessToken) {
+                    DeepgramKeyStore.shared.setDeepgramKey(deepgramKey)
+                }
+
                 isSignedIn = true
                 signedInEmail = session.email
                 syncAPIKeyStatus()
@@ -317,6 +363,7 @@ final class MenuBarController: ObservableObject {
     func signOut() {
         try? sessionStore.clearSession()
         inMemoryKeyProvider.clearAPIKey()
+        DeepgramKeyStore.shared.clearDeepgramKey()
         isSignedIn = false
         signedInEmail = nil
         authStatusMessage = nil
@@ -337,6 +384,10 @@ final class MenuBarController: ObservableObject {
 
             let apiKey = try await backendAuthClient.fetchAPIKey(accessToken: activeSession.accessToken)
             inMemoryKeyProvider.setAPIKey(apiKey)
+
+            if let deepgramKey = try? await backendAuthClient.fetchDeepgramKey(accessToken: activeSession.accessToken) {
+                DeepgramKeyStore.shared.setDeepgramKey(deepgramKey)
+            }
 
             isSignedIn = true
             signedInEmail = activeSession.email
@@ -449,8 +500,70 @@ final class MenuBarController: ObservableObject {
         appDefaults.set(legacyDefaults.bool(forKey: legacyFirstLaunchConfigurationKey), forKey: firstLaunchConfigurationKey)
     }
 
+    func setTranscriptionProvider(_ provider: TranscriptionProvider) {
+        guard provider != selectedProvider else { return }
+        selectedProvider = provider
+        appDefaults.set(provider.rawValue, forKey: Self.providerDefaultsKey)
+
+        let resolvedConfig = AppConfig.load(apiKeyStore: inMemoryKeyProvider, provider: provider)
+        let resolvedTextEditor = OpenAIEditClient(config: resolvedConfig)
+        let selectionDetector = CopySelectionDetector()
+        let textInserter = TextInsertionService()
+        let clipboard = ClipboardService()
+
+        if provider == .deepgram {
+            let streamAudio = StreamingAudioCaptureService()
+            streamingAudioCapture = streamAudio
+            coordinator = DictationCoordinator(
+                audioCapture: streamAudio,
+                transcriptionClient: OpenAITranscriptionClient(config: resolvedConfig),
+                transcriptionLogStore: FileTranscriptionLogStore(),
+                textEditor: resolvedTextEditor,
+                textInserter: textInserter,
+                clipboard: clipboard,
+                selectionDetector: selectionDetector,
+                permissionService: permissionService,
+                notifier: notifier,
+                config: resolvedConfig,
+                stateDidChange: { [weak stateSink] newState in
+                    await stateSink?.publish(newState)
+                },
+                eventDidOccur: { [weak eventSink] event in
+                    await eventSink?.publish(event)
+                },
+                streamingAudioCapture: streamAudio,
+                streamingClient: DeepgramStreamingClient(keyProvider: DeepgramKeyStore.shared),
+                transcriptDidUpdate: { [weak stateSink] text in
+                    await stateSink?.publishTranscriptUpdate(text)
+                }
+            )
+        } else {
+            streamingAudioCapture = nil
+            coordinator = DictationCoordinator(
+                audioCapture: audioCapture,
+                transcriptionClient: OpenAITranscriptionClient(config: resolvedConfig),
+                transcriptionLogStore: FileTranscriptionLogStore(),
+                textEditor: resolvedTextEditor,
+                textInserter: textInserter,
+                clipboard: clipboard,
+                selectionDetector: selectionDetector,
+                permissionService: permissionService,
+                notifier: notifier,
+                config: resolvedConfig,
+                stateDidChange: { [weak stateSink] newState in
+                    await stateSink?.publish(newState)
+                },
+                eventDidOccur: { [weak eventSink] event in
+                    await eventSink?.publish(event)
+                }
+            )
+        }
+
+        syncAPIKeyStatus()
+    }
+
     private func syncAPIKeyStatus() {
-        apiKeyConfigured = !config.openAIKey.isEmpty
+        apiKeyConfigured = config.hasActiveProviderKey || (selectedProvider == .deepgram && !DeepgramKeyStore.shared.currentDeepgramKey().isEmpty)
     }
 
     private func handleFnEvent(_ event: FnKeyEvent) {
@@ -477,6 +590,13 @@ final class MenuBarController: ObservableObject {
     }
 
     private func canStartDictationFromCurrentState() -> Bool {
+        if selectedProvider == .deepgram {
+            if DeepgramKeyStore.shared.currentDeepgramKey().isEmpty {
+                notifier.notify(title: "Whisper Anywhere", body: "Deepgram API key is not configured.")
+                return false
+            }
+            return true
+        }
         if config.openAIKey.isEmpty {
             notifier.notify(title: "Whisper Anywhere", body: "Sign in with Google to start dictating.")
             return false
@@ -584,7 +704,10 @@ final class MenuBarController: ObservableObject {
     }
 
     private func resolvedInstantaneousLevel() -> Float {
-        min(max(audioCapture.currentNormalizedInputLevel() ?? 0, 0), 1)
+        if let streamingAudioCapture {
+            return min(max(streamingAudioCapture.currentNormalizedInputLevel() ?? 0, 0), 1)
+        }
+        return min(max(audioCapture.currentNormalizedInputLevel() ?? 0, 0), 1)
     }
 
     private func isRecordingState(_ state: DictationState) -> Bool {

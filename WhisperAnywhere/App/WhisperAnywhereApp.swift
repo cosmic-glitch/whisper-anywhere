@@ -23,6 +23,19 @@ struct WhisperAnywhereApp: App {
                     .font(.system(size: 12, weight: .semibold))
                     .frame(maxWidth: .infinity, alignment: .leading)
 
+                Divider()
+
+                Picker("Provider", selection: Binding(
+                    get: { controller.selectedProvider },
+                    set: { controller.setTranscriptionProvider($0) }
+                )) {
+                    Text("OpenAI").tag(TranscriptionProvider.openAI)
+                    Text("Deepgram").tag(TranscriptionProvider.deepgram)
+                }
+                .pickerStyle(.inline)
+
+                Divider()
+
                 Button(action: {
                     controller.openConfiguration()
                 }) {

@@ -507,6 +507,10 @@ private final class MenuMockBackendAuthClient: BackendAuthenticating, @unchecked
     func fetchAPIKey(accessToken: String) async throws -> String {
         apiKeyToReturn
     }
+
+    func fetchDeepgramKey(accessToken: String) async throws -> String {
+        "dg-mock-key"
+    }
 }
 
 @MainActor

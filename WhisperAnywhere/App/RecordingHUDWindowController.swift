@@ -80,8 +80,11 @@ final class RecordingHUDWindowController: RecordingHUDControlling {
         positionPanel()
     }
 
-    private func panelSize(for _: RecordingHUDMode) -> NSSize {
-        fixedPanelSize
+    private func panelSize(for mode: RecordingHUDMode) -> NSSize {
+        if case .recordingWithTranscript = mode {
+            return NSSize(width: 300, height: 60)
+        }
+        return fixedPanelSize
     }
 
     private func positionPanel() {
