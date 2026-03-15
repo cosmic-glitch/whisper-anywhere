@@ -63,5 +63,6 @@ export function loadConfig() {
     txUserLimit: Math.max(1, Math.floor(envNumber("TX_USER_LIMIT", 25))),
     txDeviceWindowSeconds: Math.max(5, Math.floor(envNumber("TX_DEVICE_WINDOW_SECONDS", 60))),
     txDeviceLimit: Math.max(1, Math.floor(envNumber("TX_DEVICE_LIMIT", 25))),
+    deepgramAPIKey: env("DEEPGRAM_API_KEY"),
   };
 }

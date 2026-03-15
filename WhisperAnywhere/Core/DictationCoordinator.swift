@@ -172,11 +172,10 @@ actor DictationCoordinator {
                 recordingURL = audioURL
                 logger.info("Fn released: stopped streaming recording session=\(String(describing: self.modeForSessionContext(activeSession)), privacy: .public)")
 
-                streamingEventTask?.cancel()
-                streamingEventTask = nil
-
                 let pressDuration = Date().timeIntervalSince(startedAt)
                 guard pressDuration >= minimumPressDuration else {
+                    streamingEventTask?.cancel()
+                    streamingEventTask = nil
                     try? FileManager.default.removeItem(at: audioURL)
                     recordingURL = nil
                     sessionContext = .dictation
@@ -190,11 +189,15 @@ actor DictationCoordinator {
                 do {
                     transcript = try await streamingClient.finalize()
                 } catch {
+                    streamingEventTask?.cancel()
+                    streamingEventTask = nil
                     let elapsed = durationMilliseconds(since: transcriptionStartedAt)
                     transcriptionLogStore.persistFailure(errorDescription: error.localizedDescription, durationMs: elapsed)
                     logger.error("Streaming transcription finalize failed durationMs=\(elapsed, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
                     throw error
                 }
+                streamingEventTask?.cancel()
+                streamingEventTask = nil
                 let transcriptionElapsed = durationMilliseconds(since: transcriptionStartedAt)
                 transcriptionLogStore.persistSuccess(transcript: transcript, durationMs: transcriptionElapsed)
                 logger.info("Streaming transcription finalized durationMs=\(transcriptionElapsed, privacy: .public)")

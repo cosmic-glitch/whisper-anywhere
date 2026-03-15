@@ -112,7 +112,7 @@ final class MenuBarController: ObservableObject {
         notifier: Notifying = NotificationService(),
         fnMonitor: FnKeyMonitoring = FnKeyMonitor(),
         audioCapture: AudioCapturing = AudioCaptureService(),
-        selectionDetector: SelectionDetecting = CopySelectionDetector(),
+        selectionDetector: SelectionDetecting = AccessibilitySelectionDetector(),
         textEditor: TextEditing? = nil,
         textInserter: TextInserting = TextInsertionService(),
         clipboard: ClipboardWriting = ClipboardService(),
@@ -169,10 +169,7 @@ final class MenuBarController: ObservableObject {
                     await eventSink?.publish(event)
                 },
                 streamingAudioCapture: streamAudio,
-                streamingClient: DeepgramStreamingClient(keyProvider: DeepgramKeyStore.shared),
-                transcriptDidUpdate: { [weak stateSink] text in
-                    await stateSink?.publishTranscriptUpdate(text)
-                }
+                streamingClient: DeepgramStreamingClient(keyProvider: DeepgramKeyStore.shared)
             )
         } else {
             self.streamingAudioCapture = nil
@@ -507,7 +504,7 @@ final class MenuBarController: ObservableObject {
 
         let resolvedConfig = AppConfig.load(apiKeyStore: inMemoryKeyProvider, provider: provider)
         let resolvedTextEditor = OpenAIEditClient(config: resolvedConfig)
-        let selectionDetector = CopySelectionDetector()
+        let selectionDetector = AccessibilitySelectionDetector()
         let textInserter = TextInsertionService()
         let clipboard = ClipboardService()
 
@@ -532,10 +529,7 @@ final class MenuBarController: ObservableObject {
                     await eventSink?.publish(event)
                 },
                 streamingAudioCapture: streamAudio,
-                streamingClient: DeepgramStreamingClient(keyProvider: DeepgramKeyStore.shared),
-                transcriptDidUpdate: { [weak stateSink] text in
-                    await stateSink?.publishTranscriptUpdate(text)
-                }
+                streamingClient: DeepgramStreamingClient(keyProvider: DeepgramKeyStore.shared)
             )
         } else {
             streamingAudioCapture = nil
@@ -563,7 +557,9 @@ final class MenuBarController: ObservableObject {
     }
 
     private func syncAPIKeyStatus() {
-        apiKeyConfigured = config.hasActiveProviderKey || (selectedProvider == .deepgram && !DeepgramKeyStore.shared.currentDeepgramKey().isEmpty)
+        apiKeyConfigured = config.hasActiveProviderKey
+            || !inMemoryKeyProvider.currentAPIKey().isEmpty
+            || (selectedProvider == .deepgram && !DeepgramKeyStore.shared.currentDeepgramKey().isEmpty)
     }
 
     private func handleFnEvent(_ event: FnKeyEvent) {
